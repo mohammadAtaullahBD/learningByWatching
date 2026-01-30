@@ -8,8 +8,8 @@ type TokenInfo = {
 	type: string;
 };
 
-const nlp = winkNLP(model);
-const { its } = nlp;
+const nlp = winkNLP(model) as any;
+const { its } = nlp as any;
 
 export type SentenceAnalysis = {
 	tokens: TokenInfo[];

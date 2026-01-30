@@ -1,12 +1,17 @@
 export default function AdminSubtitlesPage() {
   return (
-    <main className="p-6 max-w-4xl mx-auto space-y-6">
-      <h1 className="text-3xl font-bold">Subtitle Uploads</h1>
-      <section className="bg-white rounded-xl p-6 shadow space-y-3">
-        <p className="text-gray-600">
+    <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-10">
+      <header className="space-y-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[color:var(--muted)]">
+          Subtitle Library
+        </p>
+        <h1 className="text-4xl font-semibold">Subtitle Uploads</h1>
+      </header>
+      <section className="rounded-3xl border border-black/5 bg-white/80 p-6 shadow-sm backdrop-blur">
+        <p className="text-[color:var(--muted)]">
           Upload subtitles for processing and indexing into the learning catalog.
         </p>
-        <div className="border-2 border-dashed rounded-xl p-8 text-center text-gray-500">
+        <div className="mt-4 rounded-2xl border border-dashed border-black/20 bg-white/60 p-8 text-center text-sm text-[color:var(--muted)]">
           Drag & drop subtitle files here or browse to upload.
         </div>
       </section>

@@ -30,11 +30,12 @@ type SubtitleUploadJob = {
 type SubtitleEnv = CloudflareEnv & {
   SUBTITLE_BUCKET: R2Bucket;
   SUBTITLE_QUEUE: Queue<SubtitleUploadJob>;
+  VOCAB_DB?: D1Database;
 };
 
 export async function POST(request: Request): Promise<Response> {
   const { env } = await getCloudflareContext({ async: true });
-  const { SUBTITLE_BUCKET, SUBTITLE_QUEUE } = env as SubtitleEnv;
+  const { SUBTITLE_BUCKET, SUBTITLE_QUEUE, VOCAB_DB } = env as SubtitleEnv;
 
   if (!SUBTITLE_BUCKET || !SUBTITLE_QUEUE) {
     return Response.json({ error: "Subtitle storage not configured" }, { status: 500 });
@@ -77,6 +78,43 @@ export async function POST(request: Request): Promise<Response> {
     fileName: file.name,
     contentType,
   };
+
+  if (VOCAB_DB) {
+    const now = new Date().toISOString();
+    await VOCAB_DB.prepare(
+      `INSERT INTO subtitle_files (
+        content_id,
+        episode_id,
+        r2_key,
+        file_name,
+        file_type,
+        status,
+        uploaded_at,
+        processed_at,
+        sentence_count,
+        term_count
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(content_id, episode_id) DO UPDATE SET
+        r2_key = excluded.r2_key,
+        file_name = excluded.file_name,
+        file_type = excluded.file_type,
+        status = excluded.status,
+        uploaded_at = excluded.uploaded_at`,
+    )
+      .bind(
+        contentId,
+        episodeId,
+        storageKey,
+        file.name,
+        contentType,
+        "queued",
+        now,
+        null,
+        0,
+        0,
+      )
+      .run();
+  }
 
   await SUBTITLE_QUEUE.send(job);
 

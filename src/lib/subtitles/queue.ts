@@ -1,6 +1,6 @@
 import { parseSubtitleText } from "./processing";
 
-type SubtitleUploadJob = {
+export type SubtitleUploadJob = {
   key: string;
   contentId: string;
   episodeId: string;

@@ -1,13 +1,24 @@
 
 import "./globals.css";
 import Navbar from "../components/Navbar";
+import { Fraunces, Sora } from "next/font/google";
+
+const sora = Sora({
+  subsets: ["latin"],
+  variable: "--font-sans",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-display",
+});
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <body className="bg-gray-100 text-gray-900">
+    <html lang="en" className={`${sora.variable} ${fraunces.variable}`}>
+      <body className="text-[15px] md:text-base">
         <Navbar />
-        {children}
+        <div className="pb-16">{children}</div>
       </body>
     </html>
   );

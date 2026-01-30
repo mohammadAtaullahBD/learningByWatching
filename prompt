@@ -1,0 +1,117 @@
+Feel free to asked me anything to clarify what to do. Here is my plan:
+I am building a web application whose MAIN GOAL is:
+👉 Learning English by memorizing and mastering vocabulary from films and TV series.
+
+This is NOT just a video player project.
+The core of the app is SUBTITLES → WORD ANALYSIS → VOCABULARY LEARNING → PROGRESS TRACKING.
+
+--------------------------------------------------
+MAIN GOAL (VERY IMPORTANT)
+--------------------------------------------------
+
+My primary goal is to learn English vocabulary effectively.
+
+The learning flow is:
+
+1. I (as ADMIN) upload a subtitle file for a movie or TV episode.
+2. The website processes the subtitle file.
+3. The system extracts ALL words.
+4. The system:
+   - Categorizes words by PART OF SPEECH (noun, verb, adjective, adverb, preposition, conjunction, phrase etc.)
+   - Finds the BEST CONTEXTUAL MEANING related to the film
+   - Translates meanings into BANGLA (Bangladesh context)
+5. Users learn words film-by-film or series-by-series.
+6. User progress is tracked over time.
+
+
+--------------------------------------------------
+CONTENT STRUCTURE
+--------------------------------------------------
+
+Content hierarchy must be:
+
+- Movies
+  - Movie
+    - Subtitle file (only for admin user)
+    - Vocabulary list (derived from subtitle)
+
+- Series
+  - Series
+    - Season
+      - Episode
+        - Subtitle file (only for admin user)
+        - Vocabulary list
+
+Words must be organized so users can study:
+- Movie by movie
+- Series by series
+- Season by season
+- Episode by episode
+
+--------------------------------------------------
+WORD PROCESSING REQUIREMENTS
+--------------------------------------------------
+
+For each subtitle file:
+
+- Parse subtitle (prefer `.vtt`, `.txt`, but `.srt` may exist)
+- Clean text (remove timestamps, noise)
+- Tokenize words
+- Normalize (lowercase, base form / lemma)
+- Remove duplicates
+- Identify:
+  - Part of speech (POS tagging)
+  - Contextual meaning (based on sentence usage)
+- Map best BANGLA meaning (not dictionary dump, but context-aware)
+
+Words should be stored with:
+- Original word
+- Base form
+- Part of speech
+- Example sentence (from subtitle)
+- Bangla meaning
+- Source (movie/series/season/episode)
+
+--------------------------------------------------
+USER LEARNING & PROGRESS TRACKING
+--------------------------------------------------
+
+The system must track per user:
+- Which words they have seen
+- Which words they marked as learned
+- Which words they revised
+- Learning progress per:
+  - Movie
+  - Series
+  - Season
+  - Episode
+
+The UI will later show:
+- New words
+- Learned words
+- Weak words
+- Progress percentage
+
+--------------------------------------------------
+TECH STACK
+--------------------------------------------------
+
+- Next.js (App Router)
+- Tailwind CSS
+- Cloudflare Workers / Pages (NOT Vercel)
+- Wrangler
+- No Node-only APIs (Cloudflare-compatible only)
+
+
+
+--------------------------------------------------
+WHAT I NEED FROM CODEX
+--------------------------------------------------
+
+1. Previous code was broken, unable to run (it was writen by Codex), so fix it
+
+ASSUME:
+- Vocabulary learning is the CORE feature
+- Everything else supports this goal
+- Solutions should be SIMPLE, CORRECT, and FUTURE-PROOF
+- UI could be simple, modern, and beautiful
