@@ -15,7 +15,7 @@ type SubtitleQueueEnv = CloudflareEnv & {
   VOCAB_DB: D1Database;
 };
 
-type ProcessingEnv = SubtitleQueueEnv & WorkersAiEnv;
+type ProcessingEnv = WorkersAiEnv & { VOCAB_DB: D1Database };
 
 type TokenOccurrence = {
   term: string;

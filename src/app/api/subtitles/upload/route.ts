@@ -124,7 +124,8 @@ export async function POST(request: Request): Promise<Response> {
     await SUBTITLE_QUEUE.send(job);
   } else if (VOCAB_DB) {
     try {
-      await processSubtitleText(job, await file.text(), env as SubtitleEnv);
+      const processingEnv = { ...(env as SubtitleEnv), VOCAB_DB };
+      await processSubtitleText(job, await file.text(), processingEnv);
     } catch (error) {
       return Response.json(
         { error: "Subtitle uploaded, but processing failed without a queue." },
