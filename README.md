@@ -1,47 +1,65 @@
-# OpenNext Starter
+# ReelVocab (Cloudflare + OpenNext)
 
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+Vocabulary-first learning from film/series subtitles. Runs on Cloudflare (D1, R2, Queues, Workers AI) via OpenNext.
 
-## Getting Started
+## Stack
+- Next.js App Router (edge runtime where data is used)
+- OpenNext Cloudflare adapter
+- Cloudflare D1 (vocab + progress), R2 (subtitle files), Queues (async parsing), Workers AI (Bangla meanings) or external translation API
+- Tailwind CSS v4
+- wink-nlp for tokenization/POS tagging (Workers compatible)
 
-Read the documentation at https://opennext.js.org/cloudflare.
+## Quick start (local worker-style dev)
+1) Install deps: `npm install`
+2) Create Cloudflare resources (names below are referenced in `wrangler.jsonc`):
+   - D1: `wrangler d1 create vocab-db` → copy `database_id` into `wrangler.jsonc`
+   - R2: `wrangler r2 create vocab-subtitles`
+   - Queue: `wrangler queues create vocab-subtitles-queue`
+3) Bind them in `wrangler.jsonc` (already templated; just replace `REPLACE_WITH_DB_ID` if needed).
+4) Generate env types (optional): `npm run cf-typegen`
+5) Run migrations + seed locally: `npm run migrate:local`
+6) Run with Cloudflare runtime bindings: `npm run dev:cf`
+   - Alternatively, `npm run preview` to build then serve through the worker.
 
-## Develop
+For plain Next dev (no bindings), `npm run dev` works but API upload will 500 because R2/Queue/D1 aren’t bound.
 
-Run the Next.js development server:
-
-```bash
-npm run dev
-# or similar package manager command
+## Deployment
 ```
-
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-## Preview
-
-Preview the application locally on the Cloudflare runtime:
-
-```bash
-npm run preview
-# or similar package manager command
+npm run deploy   # build via OpenNext and push to Cloudflare
 ```
+Ensure your account has the same-named resources or adjust `wrangler.jsonc`.
 
-## Deploy
+## Environment / secrets
+- Workers AI (default): set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` as secrets (`wrangler secret put ...`).
+- Custom translation service (optional): set `TRANSLATION_API_URL` in `wrangler.jsonc` or as a secret.
 
-Deploy the application to Cloudflare:
+## Data flow
+1) Admin uploads subtitle → `/api/subtitles/upload`
+2) File stored in R2, job enqueued to `SUBTITLE_QUEUE`
+3) Worker `queue` handler calls `handleSubtitleQueue`:
+   - Fetch subtitle from R2
+   - Parse sentences/terms, store into D1 (`subtitle_files`, `vocab_terms`, `vocab_occurrences`)
+4) Meaning lookup (Bangla) uses Workers AI or custom API and caches in `translation_cache` + `vocabulary`.
+5) Learn pages read from D1 and render vocab per episode/content.
 
-```bash
-npm run deploy
-# or similar package manager command
-```
+## Migrations
+- `migrations/0002_vocab_schema.sql` — authoritative schema aligned to the current code
+- `migrations/0003_seed.sql` — demo data for Friends/Office, plus sample vocab
+Run with: `npm run migrate:local` (uses `DB_NAME` env var, default `vocab-db`).
 
-## Learn More
+## Manual steps you still need
+- Create Cloudflare resources (D1/R2/Queue) and update `wrangler.jsonc` IDs.
+- Add secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (or set `TRANSLATION_API_URL`).
+- If deploying, run `npm run deploy` after the above.
 
-To learn more about Next.js, take a look at the following resources:
+## Current limitations / next actions
+- Processing status page still uses static data; can be wired to `subtitle_files` and queue dead-letter info.
+- User auth/progress is not implemented; D1 tables exist for vocab, not per-user tracking yet.
+- No UI yet for marking “learned/weak”; buttons are present but not wired to persistence.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Useful commands
+- `npm run dev:cf` – dev with Cloudflare bindings
+- `npm run preview` – build + serve via OpenNext worker locally
+- `npm run deploy` – push to Cloudflare
+- `npm run migrate:local` – apply schema + seed to local D1
+- `npm run cf-typegen` – regenerate `cloudflare-env.d.ts`

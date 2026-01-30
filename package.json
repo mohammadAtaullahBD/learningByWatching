@@ -4,16 +4,19 @@
 	"private": true,
 	"scripts": {
 		"dev": "next dev",
+		"dev:webpack": "next dev --webpack",
+		"dev:cf": "opennextjs-cloudflare dev",
 		"build": "next build",
 		"start": "next start",
 		"lint": "next lint",
 		"deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
 		"upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
 		"preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-		"cf-typegen": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts"
+		"cf-typegen": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts",
+		"migrate:local": "wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0002_vocab_schema.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0003_seed.sql"
 	},
 	"dependencies": {
-		"@opennextjs/cloudflare": "^1.15.1",
+		"@opennextjs/cloudflare": "^1.16.1",
 		"next": "16.1.5",
 		"react": "19.1.5",
 		"react-dom": "19.1.5",

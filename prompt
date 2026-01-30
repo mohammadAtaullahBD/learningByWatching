@@ -103,13 +103,6 @@ TECH STACK
 - No Node-only APIs (Cloudflare-compatible only)
 
 
-
---------------------------------------------------
-WHAT I NEED FROM CODEX
---------------------------------------------------
-
-1. Previous code was broken, unable to run (it was writen by Codex), so fix it
-
 ASSUME:
 - Vocabulary learning is the CORE feature
 - Everything else supports this goal
