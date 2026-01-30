@@ -67,3 +67,11 @@ INSERT INTO vocabulary (lemma, pos, example_sentence, meaning_bn) VALUES
   ('office', 'noun', 'Welcome to the office where chaos lives.', 'অফিস'),
   ('deadline', 'noun', 'We cannot miss this deadline again.', 'শেষ সময়সীমা'),
   ('prank', 'noun', 'The prank went too far this time.', 'ঠাট্টা বা প্র্যাঙ্ক');
+
+INSERT INTO word_status (user_id, content_id, episode_id, term, status)
+VALUES
+  ('default', 'friends', 'friends-ep1', 'awkward', 'learned'),
+  ('default', 'friends', 'friends-ep1', 'gesture', 'weak'),
+  ('default', 'office', 'office-ep1', 'deadline', 'learned')
+ON CONFLICT(user_id, content_id, episode_id, term)
+DO UPDATE SET status = excluded.status, updated_at = datetime('now');

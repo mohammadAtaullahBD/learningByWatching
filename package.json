@@ -13,7 +13,7 @@
 		"upload": "opennextjs-cloudflare build && opennextjs-cloudflare upload",
 		"preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
 		"cf-typegen": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts",
-		"migrate:local": "wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0002_vocab_schema.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0003_seed.sql"
+		"migrate:local": "wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0002_vocab_schema.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0004_word_status.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0003_seed.sql"
 	},
 	"dependencies": {
 		"@opennextjs/cloudflare": "^1.16.1",

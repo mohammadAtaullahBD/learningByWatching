@@ -1,3 +1,5 @@
+import { analyzeSentence } from "@/domain/vocabulary/nlp";
+import { getMeaningAndPersist, type WorkersAiEnv } from "@/domain/vocabulary/meaning";
 import { parseSubtitleText } from "./processing";
 
 export type SubtitleUploadJob = {
@@ -11,6 +13,26 @@ export type SubtitleUploadJob = {
 type SubtitleQueueEnv = CloudflareEnv & {
   SUBTITLE_BUCKET: R2Bucket;
   VOCAB_DB: D1Database;
+};
+
+type ProcessingEnv = SubtitleQueueEnv & WorkersAiEnv;
+
+type TokenOccurrence = {
+  term: string;
+  pos: string;
+  sentence: string;
+  index: number;
+};
+
+const wordPattern = /[A-Za-zÀ-ÖØ-öø-ÿ']+/;
+
+const normalizeToken = (value: string): string => value.toLowerCase();
+
+const isWordToken = (value: string, type?: string): boolean => {
+  if (type && type.toLowerCase() !== "word") {
+    return false;
+  }
+  return wordPattern.test(value);
 };
 
 const insertSubtitleFile = (
@@ -69,6 +91,7 @@ const insertOccurrence = (
   db: D1Database,
   job: SubtitleUploadJob,
   term: string,
+  pos: string,
   sentence: string,
   index: number,
   now: string,
@@ -77,14 +100,104 @@ const insertOccurrence = (
     .prepare(
       `INSERT INTO vocab_occurrences (
         term,
+        pos,
         content_id,
         episode_id,
         sentence,
         sentence_index,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(term, job.contentId, job.episodeId, sentence, index, now);
+    .bind(term, pos, job.contentId, job.episodeId, sentence, index, now);
+
+const buildTokenData = (sentences: string[]) => {
+  const occurrences: TokenOccurrence[] = [];
+  const termSet = new Set<string>();
+  const vocabExamples = new Map<string, { lemma: string; pos: string; sentence: string }>();
+
+  sentences.forEach((sentence, sentenceIndex) => {
+    const { tokens } = analyzeSentence(sentence);
+    tokens.forEach((token) => {
+      if (!isWordToken(token.value, token.type)) {
+        return;
+      }
+      const lemma = normalizeToken(token.lemma || token.value);
+      if (lemma.length <= 1) return;
+      const pos = token.pos ? token.pos.toLowerCase() : "unknown";
+      termSet.add(lemma);
+      occurrences.push({ term: lemma, pos, sentence, index: sentenceIndex });
+
+      const key = `${lemma}::${pos}`;
+      if (!vocabExamples.has(key)) {
+        vocabExamples.set(key, { lemma, pos, sentence });
+      }
+    });
+  });
+
+  return { occurrences, termSet, vocabExamples };
+};
+
+export const processSubtitleText = async (
+  job: SubtitleUploadJob,
+  text: string,
+  env: ProcessingEnv,
+): Promise<{ sentenceCount: number; termCount: number }> => {
+  const { VOCAB_DB } = env;
+  const parsed = parseSubtitleText(text);
+  const { occurrences, termSet, vocabExamples } = buildTokenData(parsed.sentences);
+  const now = new Date().toISOString();
+
+  const statements: D1PreparedStatement[] = [];
+  statements.push(
+    insertSubtitleFile(VOCAB_DB, job, now, parsed.sentences.length, termSet.size),
+  );
+
+  for (const term of termSet) {
+    statements.push(insertVocabTerm(VOCAB_DB, term, now));
+  }
+
+  for (const occurrence of occurrences) {
+    statements.push(
+      insertOccurrence(
+        VOCAB_DB,
+        job,
+        occurrence.term,
+        occurrence.pos,
+        occurrence.sentence,
+        occurrence.index,
+        now,
+      ),
+    );
+  }
+
+  if (statements.length > 0) {
+    for (let i = 0; i < statements.length; i += 100) {
+      await VOCAB_DB.batch(statements.slice(i, i + 100));
+    }
+  }
+
+  const canTranslate =
+    Boolean(env.TRANSLATION_API_URL) ||
+    (Boolean(env.CLOUDFLARE_ACCOUNT_ID) && Boolean(env.CLOUDFLARE_API_TOKEN));
+
+  if (canTranslate && vocabExamples.size > 0) {
+    for (const example of vocabExamples.values()) {
+      try {
+        await getMeaningAndPersist({
+          db: VOCAB_DB,
+          lemma: example.lemma,
+          pos: example.pos,
+          exampleSentence: example.sentence,
+          env,
+        });
+      } catch (error) {
+        // Skip meaning failures so processing can complete.
+      }
+    }
+  }
+
+  return { sentenceCount: parsed.sentences.length, termCount: termSet.size };
+};
 
 export const handleSubtitleQueue = async (
   batch: MessageBatch<SubtitleUploadJob>,
@@ -103,40 +216,7 @@ export const handleSubtitleQueue = async (
       }
 
       const text = await object.text();
-      const parsed = parseSubtitleText(text);
-      const now = new Date().toISOString();
-
-      const statements: D1PreparedStatement[] = [];
-      statements.push(
-        insertSubtitleFile(
-          VOCAB_DB,
-          job,
-          now,
-          parsed.sentences.length,
-          parsed.terms.length,
-        ),
-      );
-
-      for (const term of parsed.terms) {
-        statements.push(insertVocabTerm(VOCAB_DB, term, now));
-      }
-
-      for (const occurrence of parsed.occurrences) {
-        statements.push(
-          insertOccurrence(
-            VOCAB_DB,
-            job,
-            occurrence.term,
-            occurrence.sentence,
-            occurrence.index,
-            now,
-          ),
-        );
-      }
-
-      if (statements.length > 0) {
-        await VOCAB_DB.batch(statements);
-      }
+      await processSubtitleText(job, text, env as ProcessingEnv);
       message.ack();
     } catch (error) {
       message.retry();

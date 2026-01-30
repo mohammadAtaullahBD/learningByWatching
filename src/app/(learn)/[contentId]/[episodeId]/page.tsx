@@ -1,8 +1,10 @@
+import VocabStatusButtons from "@/components/VocabStatusButtons";
 import { getD1Database } from "@/lib/d1";
 
 export const dynamic = "force-dynamic";
 export const runtime = "edge";
 
+const USER_ID = "default";
 const STATUS_OPTIONS = ["new", "learned", "weak"] as const;
 
 type VocabStatus = (typeof STATUS_OPTIONS)[number];
@@ -25,27 +27,22 @@ async function fetchVocab(contentId: string, episodeId: string): Promise<VocabRo
     .prepare(
       `SELECT
         o.term as word,
-        v.pos as part_of_speech,
+        COALESCE(MIN(o.pos), v.pos) as part_of_speech,
         v.meaning_bn as meaning,
         MIN(o.sentence) as example,
-        'new' as status
+        COALESCE(ws.status, 'new') as status
       FROM vocab_occurrences o
       LEFT JOIN vocabulary v ON v.lemma = o.term
+      LEFT JOIN word_status ws
+        ON ws.user_id = ? AND ws.content_id = o.content_id AND ws.episode_id = o.episode_id AND ws.term = o.term
       WHERE o.content_id = ? AND o.episode_id = ?
-      GROUP BY o.term
+      GROUP BY o.term, ws.status, v.meaning_bn
       ORDER BY o.term ASC`
     )
-    .bind(contentId, episodeId)
+    .bind(USER_ID, contentId, episodeId)
     .all<VocabRow>();
 
   return result.results ?? [];
-}
-
-function statusClasses(isActive: boolean) {
-  if (isActive) {
-    return "bg-[color:var(--accent)] text-white";
-  }
-  return "bg-white text-[color:var(--muted)] border border-black/10";
 }
 
 export default async function EpisodeVocabPage({
@@ -95,20 +92,13 @@ export default async function EpisodeVocabPage({
                     {entry.example ?? "—"}
                   </td>
                   <td className="p-4">
-                    <div className="inline-flex gap-1 rounded-full border border-black/5 bg-white p-1">
-                      {STATUS_OPTIONS.map((option) => (
-                        <button
-                          key={option}
-                          type="button"
-                          aria-pressed={entry.status === option}
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${statusClasses(
-                            entry.status === option,
-                          )}`}
-                        >
-                          {option}
-                        </button>
-                      ))}
-                    </div>
+                    <VocabStatusButtons
+                      contentId={contentId}
+                      episodeId={episodeId}
+                      term={entry.word}
+                      initialStatus={entry.status}
+                      options={STATUS_OPTIONS}
+                    />
                   </td>
                 </tr>
               ))}

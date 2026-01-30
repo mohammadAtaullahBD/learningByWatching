@@ -1,9 +1,75 @@
 
 import Link from "next/link";
-import { films } from "@/domain/content/fixtures";
-import { stats } from "@/domain/progress/fixtures";
+import { getD1Database } from "@/lib/d1";
 
-export default function Dashboard() {
+export const dynamic = "force-dynamic";
+export const runtime = "edge";
+
+type ContentRow = {
+  content_id: string;
+  episode_count: number;
+  word_count: number;
+};
+
+type StatsRow = {
+  wordsLearned: number;
+  progress: number;
+  episodesStudied: number;
+};
+
+async function fetchContents(): Promise<ContentRow[]> {
+  const db = await getD1Database();
+  if (!db) return [];
+
+  const result = await db
+    .prepare(
+      `SELECT content_id,
+        COUNT(DISTINCT episode_id) as episode_count,
+        COUNT(DISTINCT term) as word_count
+      FROM vocab_occurrences
+      GROUP BY content_id
+      ORDER BY content_id`,
+    )
+    .all<ContentRow>();
+
+  return result.results ?? [];
+}
+
+async function fetchStats(): Promise<StatsRow> {
+  const db = await getD1Database();
+  if (!db) {
+    return { wordsLearned: 0, progress: 0, episodesStudied: 0 };
+  }
+
+  const totals = await db
+    .prepare("SELECT COUNT(DISTINCT term) as total FROM vocab_occurrences")
+    .first<{ total: number }>();
+
+  const learned = await db
+    .prepare(
+      "SELECT COUNT(DISTINCT term) as learned FROM word_status WHERE status = 'learned'",
+    )
+    .first<{ learned: number }>();
+
+  const episodes = await db
+    .prepare(
+      "SELECT COUNT(DISTINCT episode_id) as episodes FROM word_status WHERE status = 'learned'",
+    )
+    .first<{ episodes: number }>();
+
+  const totalTerms = totals?.total ?? 0;
+  const learnedTerms = learned?.learned ?? 0;
+  const progress = totalTerms > 0 ? Math.round((learnedTerms / totalTerms) * 100) : 0;
+
+  return {
+    wordsLearned: learnedTerms,
+    progress,
+    episodesStudied: episodes?.episodes ?? 0,
+  };
+}
+
+export default async function Dashboard() {
+  const [contents, stats] = await Promise.all([fetchContents(), fetchStats()]);
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
       <section className="rounded-3xl border border-black/5 bg-white/80 p-8 shadow-sm backdrop-blur">
@@ -47,35 +113,34 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {films.map((f) => {
-            const meta =
-              f.type === "Series"
-                ? `${f.episodes ?? 0} Episodes`
-                : f.runtimeMinutes
-                  ? `${f.runtimeMinutes} min`
-                  : "Movie";
-
-            return (
+          {contents.length === 0 ? (
+            <div className="rounded-3xl border border-black/5 bg-white/85 p-6 text-sm text-[color:var(--muted)] shadow-sm backdrop-blur">
+              Upload a subtitle to populate your library.
+            </div>
+          ) : (
+            contents.map((content) => (
               <div
-                key={f.id}
+                key={content.content_id}
                 className="rounded-3xl border border-black/5 bg-white/85 p-6 shadow-sm backdrop-blur"
               >
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-semibold">{f.title}</h3>
+                  <h3 className="text-xl font-semibold">{content.content_id}</h3>
                   <span className="rounded-full bg-[color:var(--surface-muted)] px-3 py-1 text-xs uppercase tracking-wide text-[color:var(--muted)]">
-                    {f.type}
+                    Series
                   </span>
                 </div>
-                <p className="mt-2 text-sm text-[color:var(--muted)]">{meta}</p>
+                <p className="mt-2 text-sm text-[color:var(--muted)]">
+                  {content.episode_count} Episodes · {content.word_count} words
+                </p>
                 <Link
-                  href={`/film/${f.id}`}
+                  href={`/film/${content.content_id}`}
                   className="mt-5 inline-flex items-center gap-2 rounded-full border border-black/5 bg-white px-4 py-2 text-sm font-semibold text-[color:var(--text)] transition hover:border-black/10"
                 >
                   Open vocab list
                 </Link>
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
       </section>
     </main>

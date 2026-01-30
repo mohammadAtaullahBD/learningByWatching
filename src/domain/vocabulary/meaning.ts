@@ -5,7 +5,7 @@ import {
 	setCachedTranslation,
 } from "./db";
 
-type WorkersAiEnv = {
+export type WorkersAiEnv = {
 	CLOUDFLARE_ACCOUNT_ID?: string;
 	CLOUDFLARE_API_TOKEN?: string;
 	TRANSLATION_API_URL?: string;

@@ -1,4 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { processSubtitleText } from "@/lib/subtitles/queue";
 
 const allowedExtensions = new Set(["vtt", "srt", "txt"]);
 
@@ -29,15 +30,18 @@ type SubtitleUploadJob = {
 
 type SubtitleEnv = CloudflareEnv & {
   SUBTITLE_BUCKET: R2Bucket;
-  SUBTITLE_QUEUE: Queue<SubtitleUploadJob>;
+  SUBTITLE_QUEUE?: Queue<SubtitleUploadJob>;
   VOCAB_DB?: D1Database;
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_API_TOKEN?: string;
+  TRANSLATION_API_URL?: string;
 };
 
 export async function POST(request: Request): Promise<Response> {
   const { env } = await getCloudflareContext({ async: true });
   const { SUBTITLE_BUCKET, SUBTITLE_QUEUE, VOCAB_DB } = env as SubtitleEnv;
 
-  if (!SUBTITLE_BUCKET || !SUBTITLE_QUEUE) {
+  if (!SUBTITLE_BUCKET) {
     return Response.json({ error: "Subtitle storage not configured" }, { status: 500 });
   }
 
@@ -116,7 +120,23 @@ export async function POST(request: Request): Promise<Response> {
       .run();
   }
 
-  await SUBTITLE_QUEUE.send(job);
+  if (SUBTITLE_QUEUE) {
+    await SUBTITLE_QUEUE.send(job);
+  } else if (VOCAB_DB) {
+    try {
+      await processSubtitleText(job, await file.text(), env as SubtitleEnv);
+    } catch (error) {
+      return Response.json(
+        { error: "Subtitle uploaded, but processing failed without a queue." },
+        { status: 500 },
+      );
+    }
+  } else {
+    return Response.json(
+      { error: "Database not configured for subtitle processing." },
+      { status: 500 },
+    );
+  }
 
   return Response.json({ ok: true, key: storageKey });
 }
