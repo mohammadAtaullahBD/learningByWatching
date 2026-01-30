@@ -72,11 +72,12 @@ async function fetchStats(userId: string | null): Promise<StatsRow> {
 }
 
 export default async function Dashboard() {
-  const user = await getSessionUser();
-  const [contents, stats] = await Promise.all([
-    fetchContents(),
-    fetchStats(user?.username ?? null),
-  ]);
+  try {
+    const user = await getSessionUser();
+    const [contents, stats] = await Promise.all([
+      fetchContents(),
+      fetchStats(user?.username ?? null),
+    ]);
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
       <section className="rounded-3xl border border-black/5 bg-white/80 p-8 shadow-sm backdrop-blur">
@@ -152,4 +153,15 @@ export default async function Dashboard() {
       </section>
     </main>
   );
+  } catch (error) {
+    console.error("dashboard render failed", error);
+    return (
+      <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-10">
+        <h1 className="text-2xl font-semibold">Dashboard unavailable</h1>
+        <p className="text-sm text-[color:var(--muted)]">
+          There was an error loading dashboard data. Please try again.
+        </p>
+      </main>
+    );
+  }
 }

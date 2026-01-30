@@ -1,4 +1,3 @@
-import { analyzeSentence } from "@/domain/vocabulary/nlp";
 import { getMeaningAndPersist, type WorkersAiEnv } from "@/domain/vocabulary/meaning";
 import { parseSubtitleText } from "./processing";
 
@@ -110,7 +109,8 @@ const insertOccurrence = (
     )
     .bind(term, pos, job.contentId, job.episodeId, sentence, index, now);
 
-const buildTokenData = (sentences: string[]) => {
+const buildTokenData = async (sentences: string[]) => {
+  const { analyzeSentence } = await import("@/domain/vocabulary/nlp");
   const occurrences: TokenOccurrence[] = [];
   const termSet = new Set<string>();
   const vocabExamples = new Map<string, { lemma: string; pos: string; sentence: string }>();
@@ -144,7 +144,7 @@ export const processSubtitleText = async (
 ): Promise<{ sentenceCount: number; termCount: number }> => {
   const { VOCAB_DB } = env;
   const parsed = parseSubtitleText(text);
-  const { occurrences, termSet, vocabExamples } = buildTokenData(parsed.sentences);
+  const { occurrences, termSet, vocabExamples } = await buildTokenData(parsed.sentences);
   const now = new Date().toISOString();
 
   const statements: D1PreparedStatement[] = [];

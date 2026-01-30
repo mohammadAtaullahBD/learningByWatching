@@ -1,22 +1,14 @@
 
 import "./globals.css";
 import Navbar from "../components/Navbar";
-import { Fraunces, Sora } from "next/font/google";
 
-const sora = Sora({
-  subsets: ["latin"],
-  variable: "--font-sans",
-});
-
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-display",
-});
+export const runtime = "edge";
+export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sora.variable} ${fraunces.variable}`}>
-      <body className="text-[15px] md:text-base">
+    <html lang="en" className="font-sans">
+      <body className="text-[15px] md:text-base" suppressHydrationWarning>
         <Navbar />
         <div className="pb-16">{children}</div>
       </body>

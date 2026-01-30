@@ -1,5 +1,5 @@
-import winkNLP from "wink-nlp";
-import model from "wink-eng-lite-web-model";
+import rawWink from "wink-nlp";
+import rawModel from "wink-eng-lite-web-model";
 
 type TokenInfo = {
 	value: string;
@@ -8,14 +8,24 @@ type TokenInfo = {
 	type: string;
 };
 
-const nlp = winkNLP(model) as any;
-const { its } = nlp as any;
+const model = (rawModel as any)?.default ?? rawModel;
+const winkNLP = (rawWink as any)?.default ?? rawWink;
+let nlpInstance: any | null = null;
+
+const getNlp = () => {
+	if (!nlpInstance) {
+		nlpInstance = winkNLP(model) as any;
+	}
+	return nlpInstance;
+};
 
 export type SentenceAnalysis = {
 	tokens: TokenInfo[];
 };
 
 export const analyzeSentence = (sentence: string): SentenceAnalysis => {
+	const nlp = getNlp();
+	const { its } = nlp as any;
 	const doc = nlp.readDoc(sentence);
 	const values = doc.tokens().out(its.value) as string[];
 	const lemmas = doc.tokens().out(its.lemma) as string[];

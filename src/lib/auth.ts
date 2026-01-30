@@ -85,23 +85,28 @@ export const getSessionToken = async (): Promise<string | null> => {
 };
 
 export const getSessionUser = async (): Promise<UserRow | null> => {
-  const token = await getSessionToken();
-  if (!token) return null;
-  const db = await getD1Database();
-  if (!db) return null;
+  try {
+    const token = await getSessionToken();
+    if (!token) return null;
+    const db = await getD1Database();
+    if (!db) return null;
 
-  const now = new Date().toISOString();
-  const row = await db
-    .prepare(
-      `SELECT u.username as username, u.role as role
-       FROM sessions s
-       JOIN users u ON u.username = s.username
-       WHERE s.token = ?1 AND s.expires_at > ?2`,
-    )
-    .bind(token, now)
-    .first<UserRow>();
+    const now = new Date().toISOString();
+    const row = await db
+      .prepare(
+        `SELECT u.username as username, u.role as role
+         FROM sessions s
+         JOIN users u ON u.username = s.username
+         WHERE s.token = ?1 AND s.expires_at > ?2`,
+      )
+      .bind(token, now)
+      .first<UserRow>();
 
-  return row ?? null;
+    return row ?? null;
+  } catch (error) {
+    console.error("getSessionUser failed", error);
+    return null;
+  }
 };
 
 export const requireUser = async (): Promise<UserRow> => {
