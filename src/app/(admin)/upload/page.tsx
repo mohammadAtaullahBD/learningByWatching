@@ -1,5 +1,7 @@
 import SubtitleUploadForm from "@/components/SubtitleUploadForm";
 import { getD1Database } from "@/lib/d1";
+import { getSessionUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "edge";
@@ -29,6 +31,13 @@ async function fetchUploads(): Promise<UploadRow[]> {
 }
 
 export default async function UploadPage() {
+  const user = await getSessionUser();
+  if (!user) {
+    redirect("/login?next=/upload");
+  }
+  if (user.role !== "admin") {
+    redirect("/dashboard");
+  }
   const uploads = await fetchUploads();
 
   return (

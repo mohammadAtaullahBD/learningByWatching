@@ -1,13 +1,18 @@
-
 import Link from "next/link";
+import { getSessionUser } from "@/lib/auth";
+import LogoutButton from "@/components/LogoutButton";
 
-const links = [
-  { href: "/dashboard", label: "Dashboard" },
-  { href: "/upload", label: "Upload" },
-  { href: "/processing", label: "Processing" },
-];
-
-export default function Navbar() {
+export default async function Navbar() {
+  const user = await getSessionUser();
+  const links = [{ href: "/dashboard", label: "Dashboard" }];
+  if (user?.role === "admin") {
+    links.push(
+      { href: "/upload", label: "Upload" },
+      { href: "/processing", label: "Processing" },
+      { href: "/subtitles", label: "Subtitles" },
+      { href: "/usage", label: "Usage" },
+    );
+  }
   return (
     <nav className="sticky top-0 z-30 border-b border-black/5 bg-white/70 backdrop-blur">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
@@ -24,6 +29,16 @@ export default function Navbar() {
               {link.label}
             </Link>
           ))}
+          {user ? (
+            <LogoutButton />
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-full border border-black/10 px-3 py-1.5 text-sm text-[color:var(--muted)] transition hover:border-black/20 hover:text-[color:var(--text)]"
+            >
+              Login
+            </Link>
+          )}
         </div>
       </div>
     </nav>

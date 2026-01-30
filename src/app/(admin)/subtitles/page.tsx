@@ -1,4 +1,16 @@
-export default function AdminSubtitlesPage() {
+import { getSessionUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
+
+export const runtime = "edge";
+
+export default async function AdminSubtitlesPage() {
+  const user = await getSessionUser();
+  if (!user) {
+    redirect("/login?next=/subtitles");
+  }
+  if (user.role !== "admin") {
+    redirect("/dashboard");
+  }
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-10">
       <header className="space-y-2">

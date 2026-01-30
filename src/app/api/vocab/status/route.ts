@@ -1,4 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getSessionUser } from "@/lib/auth";
 
 export const runtime = "edge";
 
@@ -14,6 +15,10 @@ type StatusPayload = {
 type EnvWithDb = CloudflareEnv & { VOCAB_DB?: D1Database };
 
 export async function POST(request: Request): Promise<Response> {
+  const user = await getSessionUser();
+  if (!user) {
+    return Response.json({ error: "Authentication required" }, { status: 401 });
+  }
   const payload = (await request.json().catch(() => null)) as StatusPayload | null;
   if (!payload) {
     return Response.json({ error: "Invalid payload" }, { status: 400 });
@@ -37,7 +42,7 @@ export async function POST(request: Request): Promise<Response> {
        ON CONFLICT(user_id, content_id, episode_id, term)
        DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`,
     )
-    .bind("default", contentId, episodeId, term, status)
+    .bind(user.username, contentId, episodeId, term, status)
     .run();
 
   return Response.json({ ok: true });

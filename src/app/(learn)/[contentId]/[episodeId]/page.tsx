@@ -1,5 +1,6 @@
 import VocabStatusButtons from "@/components/VocabStatusButtons";
 import { getD1Database } from "@/lib/d1";
+import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "edge";
@@ -17,7 +18,11 @@ type VocabRow = {
   status: VocabStatus;
 };
 
-async function fetchVocab(contentId: string, episodeId: string): Promise<VocabRow[]> {
+async function fetchVocab(
+  contentId: string,
+  episodeId: string,
+  userId: string,
+): Promise<VocabRow[]> {
   const db = await getD1Database();
   if (!db) {
     return [];
@@ -39,7 +44,7 @@ async function fetchVocab(contentId: string, episodeId: string): Promise<VocabRo
       GROUP BY o.term, ws.status, v.meaning_bn
       ORDER BY o.term ASC`
     )
-    .bind(USER_ID, contentId, episodeId)
+    .bind(userId, contentId, episodeId)
     .all<VocabRow>();
 
   return result.results ?? [];
@@ -50,8 +55,10 @@ export default async function EpisodeVocabPage({
 }: {
   params: Promise<{ contentId: string; episodeId: string }>;
 }) {
+  const user = await getSessionUser();
+  const userId = user?.username ?? USER_ID;
   const { contentId, episodeId } = await params;
-  const vocab = await fetchVocab(contentId, episodeId);
+  const vocab = await fetchVocab(contentId, episodeId, userId);
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
@@ -64,6 +71,11 @@ export default async function EpisodeVocabPage({
       </header>
 
       <section className="overflow-x-auto rounded-3xl border border-black/5 bg-white/80 shadow-sm backdrop-blur">
+        {!user && (
+          <div className="border-b border-black/5 px-6 py-3 text-xs text-[color:var(--muted)]">
+            Sign in to save learned/weak status.
+          </div>
+        )}
         {vocab.length === 0 ? (
           <div className="p-6 text-[color:var(--muted)]">
             No vocab entries found yet. Ensure subtitle processing has populated
@@ -98,6 +110,7 @@ export default async function EpisodeVocabPage({
                       term={entry.word}
                       initialStatus={entry.status}
                       options={STATUS_OPTIONS}
+                      disabled={!user}
                     />
                   </td>
                 </tr>

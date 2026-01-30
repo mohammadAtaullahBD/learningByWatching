@@ -1,4 +1,6 @@
 import { getD1Database } from "@/lib/d1";
+import { getSessionUser } from "@/lib/auth";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "edge";
@@ -26,6 +28,13 @@ async function fetchJobs(): Promise<JobRow[]> {
 }
 
 export default async function AdminProcessingPage() {
+  const user = await getSessionUser();
+  if (!user) {
+    redirect("/login?next=/processing");
+  }
+  if (user.role !== "admin") {
+    redirect("/dashboard");
+  }
   const jobs = await fetchJobs();
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-10">

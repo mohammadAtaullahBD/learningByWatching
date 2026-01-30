@@ -1,6 +1,7 @@
 
 import Link from "next/link";
 import { getD1Database } from "@/lib/d1";
+import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "edge";
@@ -35,9 +36,9 @@ async function fetchContents(): Promise<ContentRow[]> {
   return result.results ?? [];
 }
 
-async function fetchStats(): Promise<StatsRow> {
+async function fetchStats(userId: string | null): Promise<StatsRow> {
   const db = await getD1Database();
-  if (!db) {
+  if (!db || !userId) {
     return { wordsLearned: 0, progress: 0, episodesStudied: 0 };
   }
 
@@ -47,14 +48,16 @@ async function fetchStats(): Promise<StatsRow> {
 
   const learned = await db
     .prepare(
-      "SELECT COUNT(DISTINCT term) as learned FROM word_status WHERE status = 'learned'",
+      "SELECT COUNT(DISTINCT term) as learned FROM word_status WHERE status = 'learned' AND user_id = ?1",
     )
+    .bind(userId)
     .first<{ learned: number }>();
 
   const episodes = await db
     .prepare(
-      "SELECT COUNT(DISTINCT episode_id) as episodes FROM word_status WHERE status = 'learned'",
+      "SELECT COUNT(DISTINCT episode_id) as episodes FROM word_status WHERE status = 'learned' AND user_id = ?1",
     )
+    .bind(userId)
     .first<{ episodes: number }>();
 
   const totalTerms = totals?.total ?? 0;
@@ -69,7 +72,11 @@ async function fetchStats(): Promise<StatsRow> {
 }
 
 export default async function Dashboard() {
-  const [contents, stats] = await Promise.all([fetchContents(), fetchStats()]);
+  const user = await getSessionUser();
+  const [contents, stats] = await Promise.all([
+    fetchContents(),
+    fetchStats(user?.username ?? null),
+  ]);
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-8 px-6 py-10">
       <section className="rounded-3xl border border-black/5 bg-white/80 p-8 shadow-sm backdrop-blur">
@@ -84,7 +91,7 @@ export default async function Dashboard() {
             </p>
           </div>
           <div className="rounded-2xl bg-[color:var(--surface-muted)] px-4 py-3 text-sm text-[color:var(--muted)]">
-            Next goal: Hit 300 learned words this week.
+            {user ? "Next goal: Hit 300 learned words this week." : "Sign in to track progress."}
           </div>
         </div>
 

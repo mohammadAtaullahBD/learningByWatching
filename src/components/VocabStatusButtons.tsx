@@ -10,6 +10,7 @@ type Props = {
   term: string;
   initialStatus: StatusOption;
   options: readonly StatusOption[];
+  disabled?: boolean;
 };
 
 export default function VocabStatusButtons({
@@ -18,12 +19,13 @@ export default function VocabStatusButtons({
   term,
   initialStatus,
   options,
+  disabled = false,
 }: Props) {
   const [status, setStatus] = useState<StatusOption>(initialStatus);
   const [isSaving, setIsSaving] = useState(false);
 
   const updateStatus = async (nextStatus: StatusOption) => {
-    if (nextStatus === status || isSaving) return;
+    if (disabled || nextStatus === status || isSaving) return;
     const previous = status;
     setStatus(nextStatus);
     setIsSaving(true);
@@ -53,11 +55,12 @@ export default function VocabStatusButtons({
           type="button"
           aria-pressed={status === option}
           onClick={() => updateStatus(option)}
+          disabled={disabled}
           className={`rounded-full px-3 py-1 text-xs font-semibold ${
             status === option
               ? "bg-[color:var(--accent)] text-white"
               : "bg-white text-[color:var(--muted)] border border-black/10"
-          }`}
+          } ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
         >
           {option}
         </button>

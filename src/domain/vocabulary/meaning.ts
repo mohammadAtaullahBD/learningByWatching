@@ -9,6 +9,8 @@ export type WorkersAiEnv = {
 	CLOUDFLARE_ACCOUNT_ID?: string;
 	CLOUDFLARE_API_TOKEN?: string;
 	TRANSLATION_API_URL?: string;
+	GOOGLE_TRANSLATE_API_KEY?: string;
+	TRANSLATION_CHAR_LIMIT?: string;
 };
 
 type MeaningRequest = {
@@ -22,6 +24,10 @@ type MeaningRequest = {
 type MeaningResponse = {
 	meaningBn: string;
 	source: "cache" | "api";
+};
+
+type UsageRow = {
+	char_count: number;
 };
 
 const buildCacheKey = (lemma: string, pos: string, sentence: string): string =>
@@ -119,11 +125,96 @@ const fetchMeaningFromTranslationApi = async (
 	return payload.meaning_bn.trim();
 };
 
+const fetchMeaningFromGoogleTranslate = async (
+	lemma: string,
+	apiKey: string,
+): Promise<string> => {
+	const url = new URL("https://translation.googleapis.com/language/translate/v2");
+	url.searchParams.set("key", apiKey);
+	const response = await fetch(url.toString(), {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			q: lemma,
+			source: "en",
+			target: "bn",
+			format: "text",
+		}),
+	});
+
+	if (!response.ok) {
+		throw new Error(`Google Translate API failed with status ${response.status}.`);
+	}
+
+	const payload = (await response.json()) as {
+		data?: { translations?: Array<{ translatedText?: string }> };
+	};
+	const translated = payload.data?.translations?.[0]?.translatedText;
+	if (!translated) {
+		throw new Error("Google Translate response missing translatedText.");
+	}
+
+	return translated.trim();
+};
+
+const buildMonthKey = (value: Date): string => {
+	const year = value.getUTCFullYear();
+	const month = String(value.getUTCMonth() + 1).padStart(2, "0");
+	return `${year}-${month}`;
+};
+
+const getUsageCount = async (
+	db: D1Database,
+	monthKey: string,
+	provider: string,
+): Promise<number> => {
+	const row = await db
+		.prepare(
+			"SELECT char_count as char_count FROM translation_usage WHERE month_key = ?1 AND provider = ?2",
+		)
+		.bind(monthKey, provider)
+		.first<UsageRow>();
+	return row?.char_count ?? 0;
+};
+
+const incrementUsage = async (
+	db: D1Database,
+	monthKey: string,
+	provider: string,
+	delta: number,
+): Promise<void> => {
+	await db
+		.prepare(
+			`INSERT INTO translation_usage (month_key, provider, char_count, updated_at)
+       VALUES (?1, ?2, ?3, datetime('now'))
+       ON CONFLICT(month_key, provider) DO UPDATE SET
+         char_count = translation_usage.char_count + ?3,
+         updated_at = datetime('now')`,
+		)
+		.bind(monthKey, provider, delta)
+		.run();
+};
+
+const ensureWithinLimit = async (
+	db: D1Database,
+	provider: string,
+	charCount: number,
+	limit: number,
+): Promise<void> => {
+	const monthKey = buildMonthKey(new Date());
+	const used = await getUsageCount(db, monthKey, provider);
+	if (used + charCount > limit) {
+		throw new Error("Monthly translation limit reached.");
+	}
+	await incrementUsage(db, monthKey, provider, charCount);
+};
+
 const fetchMeaning = async (
 	lemma: string,
 	pos: string,
 	sentence: string,
 	env: WorkersAiEnv,
+	db: D1Database,
 ): Promise<string> => {
 	if (env.TRANSLATION_API_URL) {
 		return fetchMeaningFromTranslationApi(
@@ -132,6 +223,13 @@ const fetchMeaning = async (
 			sentence,
 			env.TRANSLATION_API_URL,
 		);
+	}
+
+	if (env.GOOGLE_TRANSLATE_API_KEY) {
+		const limit = Number(env.TRANSLATION_CHAR_LIMIT ?? "500000");
+		const charCount = lemma.length;
+		await ensureWithinLimit(db, "google-translate", charCount, limit);
+		return fetchMeaningFromGoogleTranslate(lemma, env.GOOGLE_TRANSLATE_API_KEY);
 	}
 
 	return fetchMeaningFromWorkersAi(lemma, pos, sentence, env);
@@ -154,7 +252,7 @@ export const getMeaningAndPersist = async (
 		return { meaningBn: cached, source: "cache" };
 	}
 
-	const meaningBn = await fetchMeaning(lemma, pos, exampleSentence, env);
+	const meaningBn = await fetchMeaning(lemma, pos, exampleSentence, env, db);
 	await setCachedTranslation(db, cacheKey, meaningBn);
 	await saveVocabularyEntry(db, {
 		lemma,

@@ -1,4 +1,5 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { getSessionUser } from "@/lib/auth";
 import { processSubtitleText } from "@/lib/subtitles/queue";
 
 const allowedExtensions = new Set(["vtt", "srt", "txt"]);
@@ -38,6 +39,10 @@ type SubtitleEnv = CloudflareEnv & {
 };
 
 export async function POST(request: Request): Promise<Response> {
+  const user = await getSessionUser();
+  if (!user || user.role !== "admin") {
+    return Response.json({ error: "Admin access required." }, { status: 403 });
+  }
   const { env } = await getCloudflareContext({ async: true });
   const { SUBTITLE_BUCKET, SUBTITLE_QUEUE, VOCAB_DB } = env as SubtitleEnv;
 
