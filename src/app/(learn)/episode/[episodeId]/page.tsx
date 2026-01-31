@@ -1,5 +1,6 @@
 
 import { getD1Database } from "@/lib/d1";
+import ReportWordButton from "@/components/ReportWordButton";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +11,11 @@ type VocabRow = {
   meaning: string | null;
   example: string | null;
   content_id: string;
+  is_corrupt: number;
 };
 
-const sanitizeMeaning = (value: string | null): string | null => {
-  if (!value) return value;
-  return value.replace(/^\uFEFF/, "").replace(/\uFFFD/g, "").trim();
-};
+const isCorruptedMeaning = (value: string | null, flag: number): boolean =>
+  flag === 1 || Boolean(value && value.includes("\uFFFD"));
 
 async function fetchEpisodeVocab(episodeId: string): Promise<VocabRow[]> {
   const db = await getD1Database();
@@ -28,12 +28,13 @@ async function fetchEpisodeVocab(episodeId: string): Promise<VocabRow[]> {
         COALESCE(MAX(o.lemma), v.lemma) as lemma,
         COALESCE(MAX(o.pos), v.pos) as part_of_speech,
         COALESCE(MAX(o.meaning_bn_override), v.meaning_bn) as meaning,
+        COALESCE(MAX(o.is_corrupt_override), v.is_corrupt, 0) as is_corrupt,
         MIN(o.sentence) as example,
         o.content_id as content_id
       FROM vocab_occurrences o
       LEFT JOIN vocabulary v ON v.surface_term = o.term
       WHERE o.episode_id = ?
-      GROUP BY o.term, v.meaning_bn, v.pos, v.lemma, o.content_id
+      GROUP BY o.term, v.meaning_bn, v.pos, v.lemma, v.is_corrupt, o.content_id
       ORDER BY o.term ASC`,
     )
     .bind(episodeId)
@@ -48,10 +49,9 @@ export default async function EpisodePage({
   params: Promise<{ episodeId: string }>;
 }) {
   const { episodeId } = await params;
-  const words = (await fetchEpisodeVocab(episodeId)).map((entry) => ({
-    ...entry,
-    meaning: sanitizeMeaning(entry.meaning),
-  }));
+  const words = (await fetchEpisodeVocab(episodeId)).filter(
+    (entry) => !isCorruptedMeaning(entry.meaning, entry.is_corrupt),
+  );
   const contentId = words[0]?.content_id ?? "unknown";
 
   return (
@@ -78,7 +78,14 @@ export default async function EpisodePage({
             {words.map((w) => (
               <tr key={w.word} className="border-b border-black/5">
                 <td className="p-4">
-                  <div className="font-semibold">{w.word}</div>
+                  <div className="flex items-center gap-1">
+                    <span className="font-semibold">{w.word}</span>
+                    <ReportWordButton
+                      contentId={contentId}
+                      episodeId={episodeId}
+                      term={w.word}
+                    />
+                  </div>
                   <div className="text-xs text-[color:var(--muted)]">
                     lemma: {w.lemma ?? "—"}
                   </div>
@@ -86,7 +93,16 @@ export default async function EpisodePage({
                 <td className="p-4 text-[color:var(--muted)]">
                   {w.part_of_speech ?? "—"}
                 </td>
-                <td className="p-4">{w.meaning ?? "—"}</td>
+                <td className="p-4">
+                  <div className="flex items-center gap-1">
+                    <span>{w.meaning ?? "—"}</span>
+                    <ReportWordButton
+                      contentId={contentId}
+                      episodeId={episodeId}
+                      term={w.word}
+                    />
+                  </div>
+                </td>
                 <td className="p-4 italic text-[color:var(--muted)]">
                   {w.example ?? "—"}
                 </td>

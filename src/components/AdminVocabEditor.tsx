@@ -26,7 +26,7 @@ export default function AdminVocabEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const onSave = async () => {
+  const runAction = async (action: "update" | "resolve" | "delete") => {
     setSaving(true);
     setError(null);
     try {
@@ -40,6 +40,7 @@ export default function AdminVocabEditor({
           lemma: form.lemma,
           pos: form.pos,
           meaning: form.meaning,
+          action,
         }),
       });
       if (!response.ok) {
@@ -95,11 +96,27 @@ export default function AdminVocabEditor({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={onSave}
+              onClick={() => runAction("update")}
               disabled={saving}
               className="rounded-full bg-[color:var(--accent)] px-3 py-1 text-xs font-semibold text-white disabled:opacity-60"
             >
               {saving ? "Saving..." : "Save"}
+            </button>
+            <button
+              type="button"
+              onClick={() => runAction("resolve")}
+              disabled={saving}
+              className="rounded-full border border-black/10 px-3 py-1 text-xs font-semibold text-[color:var(--muted)]"
+            >
+              Mark OK
+            </button>
+            <button
+              type="button"
+              onClick={() => runAction("delete")}
+              disabled={saving}
+              className="rounded-full border border-red-200 px-3 py-1 text-xs font-semibold text-red-600"
+            >
+              Delete
             </button>
             {error && <span className="text-red-600">{error}</span>}
           </div>

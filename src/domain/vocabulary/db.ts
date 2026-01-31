@@ -4,6 +4,7 @@ export type VocabularyRecord = {
 	pos: string;
 	exampleSentence: string;
 	meaningBn: string;
+	isCorrupt?: number;
 };
 
 type D1Result = {
@@ -51,9 +52,10 @@ export const saveVocabularyEntry = async (
 	db: D1Database,
 	entry: VocabularyRecord,
 ): Promise<void> => {
+	const isCorrupt = entry.isCorrupt ?? 0;
 	await db
 		.prepare(
-			"INSERT INTO vocabulary (surface_term, lemma, pos, example_sentence, meaning_bn) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(surface_term, pos) DO UPDATE SET meaning_bn = excluded.meaning_bn, updated_at = CURRENT_TIMESTAMP",
+			"INSERT INTO vocabulary (surface_term, lemma, pos, example_sentence, meaning_bn, is_corrupt) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(surface_term, pos) DO UPDATE SET meaning_bn = excluded.meaning_bn, is_corrupt = excluded.is_corrupt, updated_at = CURRENT_TIMESTAMP",
 		)
 		.bind(
 			entry.surfaceTerm,
@@ -61,6 +63,7 @@ export const saveVocabularyEntry = async (
 			entry.pos,
 			entry.exampleSentence,
 			entry.meaningBn,
+			isCorrupt,
 		)
 		.run();
 };

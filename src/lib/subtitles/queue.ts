@@ -197,7 +197,7 @@ export const processSubtitleText = async (
   if (canTranslate && vocabExamples.size > 0) {
     for (const example of vocabExamples.values()) {
       try {
-        await getMeaningAndPersist({
+        const meaningResult = await getMeaningAndPersist({
           db: VOCAB_DB,
           surfaceTerm: example.surfaceTerm,
           lemma: example.lemma,
@@ -205,6 +205,15 @@ export const processSubtitleText = async (
           exampleSentence: example.sentence,
           env,
         });
+        if (meaningResult.changed) {
+          await VOCAB_DB.prepare(
+            `UPDATE vocab_occurrences
+             SET is_corrupt_override = 1
+             WHERE content_id = ?1 AND episode_id = ?2 AND term = ?3`,
+          )
+            .bind(job.contentId, job.episodeId, example.surfaceTerm)
+            .run();
+        }
       } catch (error) {
         // Skip meaning failures so processing can complete.
       }

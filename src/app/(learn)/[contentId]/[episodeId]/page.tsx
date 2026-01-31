@@ -1,7 +1,9 @@
 import VocabStatusButtons from "@/components/VocabStatusButtons";
 import AdminVocabEditor from "@/components/AdminVocabEditor";
+import ReportWordButton from "@/components/ReportWordButton";
 import { getD1Database } from "@/lib/d1";
 import { getSessionUser } from "@/lib/auth";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -17,12 +19,11 @@ type VocabRow = {
   meaning: string | null;
   example: string | null;
   status: VocabStatus;
+  is_corrupt: number;
 };
 
-const sanitizeMeaning = (value: string | null): string | null => {
-  if (!value) return value;
-  return value.replace(/^\uFEFF/, "").replace(/\uFFFD/g, "").trim();
-};
+const isCorruptedMeaning = (value: string | null, flag: number): boolean =>
+  flag === 1 || Boolean(value && value.includes("\uFFFD"));
 
 async function fetchVocab(
   contentId: string,
@@ -41,6 +42,7 @@ async function fetchVocab(
         COALESCE(MAX(o.lemma), v.lemma) as lemma,
         COALESCE(MAX(o.pos), v.pos) as part_of_speech,
         COALESCE(MAX(o.meaning_bn_override), v.meaning_bn) as meaning,
+        COALESCE(MAX(o.is_corrupt_override), v.is_corrupt, 0) as is_corrupt,
         MIN(o.sentence) as example,
         COALESCE(ws.status, 'new') as status
       FROM vocab_occurrences o
@@ -48,7 +50,7 @@ async function fetchVocab(
       LEFT JOIN word_status ws
         ON ws.user_id = ? AND ws.content_id = o.content_id AND ws.episode_id = o.episode_id AND ws.term = o.term
       WHERE o.content_id = ? AND o.episode_id = ?
-      GROUP BY o.term, ws.status, v.meaning_bn, v.pos, v.lemma
+      GROUP BY o.term, ws.status, v.meaning_bn, v.pos, v.lemma, v.is_corrupt
       ORDER BY o.term ASC`
     )
     .bind(userId, contentId, episodeId)
@@ -59,17 +61,24 @@ async function fetchVocab(
 
 export default async function EpisodeVocabPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ contentId: string; episodeId: string }>;
+  searchParams?: Promise<{ filter?: string }>;
 }) {
   const user = await getSessionUser();
   const userId = user?.username ?? USER_ID;
   const isAdmin = user?.role === "admin";
   const { contentId, episodeId } = await params;
-  const vocab = (await fetchVocab(contentId, episodeId, userId)).map((entry) => ({
-    ...entry,
-    meaning: sanitizeMeaning(entry.meaning),
-  }));
+  const { filter } = (await searchParams) ?? {};
+  const filterCorrupt = filter === "corrupt";
+  const vocabRaw = await fetchVocab(contentId, episodeId, userId);
+  const vocab = vocabRaw.filter((entry) => {
+    const corrupted = isCorruptedMeaning(entry.meaning, entry.is_corrupt);
+    if (isAdmin && filterCorrupt) return corrupted;
+    if (isAdmin) return true;
+    return !corrupted;
+  });
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
@@ -80,6 +89,26 @@ export default async function EpisodeVocabPage({
         <h1 className="text-4xl font-semibold">{episodeId}</h1>
         <p className="text-[color:var(--muted)]">{contentId}</p>
       </header>
+      {isAdmin && (
+        <div className="flex items-center gap-2 text-xs">
+          <Link
+            href={`/${contentId}/${episodeId}`}
+            className={`rounded-full border px-3 py-1 ${
+              !filterCorrupt ? "border-black/20 text-[color:var(--text)]" : "border-black/10 text-[color:var(--muted)]"
+            }`}
+          >
+            All
+          </Link>
+          <Link
+            href={`/${contentId}/${episodeId}?filter=corrupt`}
+            className={`rounded-full border px-3 py-1 ${
+              filterCorrupt ? "border-orange-300 text-orange-700" : "border-black/10 text-[color:var(--muted)]"
+            }`}
+          >
+            Corrupt only
+          </Link>
+        </div>
+      )}
 
       <section className="overflow-x-auto rounded-3xl border border-black/5 bg-white/80 shadow-sm backdrop-blur">
         {!user && (
@@ -108,7 +137,14 @@ export default async function EpisodeVocabPage({
               {vocab.map((entry) => (
                 <tr key={entry.word} className="border-b border-black/5 align-top">
                   <td className="p-4">
-                    <div className="font-semibold">{entry.word}</div>
+                    <div className="flex items-center gap-1">
+                      <span className="font-semibold">{entry.word}</span>
+                      <ReportWordButton
+                        contentId={contentId}
+                        episodeId={episodeId}
+                        term={entry.word}
+                      />
+                    </div>
                     <div className="text-xs text-[color:var(--muted)]">
                       lemma: {entry.lemma ?? "—"}
                     </div>
@@ -116,7 +152,16 @@ export default async function EpisodeVocabPage({
                   <td className="p-4 text-[color:var(--muted)]">
                     {entry.part_of_speech ?? "—"}
                   </td>
-                  <td className="p-4">{entry.meaning ?? "—"}</td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-1">
+                      <span>{entry.meaning ?? "—"}</span>
+                      <ReportWordButton
+                        contentId={contentId}
+                        episodeId={episodeId}
+                        term={entry.word}
+                      />
+                    </div>
+                  </td>
                   <td className="p-4 italic text-[color:var(--muted)]">
                     {entry.example ?? "—"}
                   </td>

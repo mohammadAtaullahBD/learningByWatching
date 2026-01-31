@@ -23,6 +23,7 @@ type MeaningRequest = {
 type MeaningResponse = {
 	meaningBn: string;
 	source: "cache" | "api";
+	changed: boolean;
 };
 
 type UsageRow = {
@@ -46,20 +47,7 @@ const extractResponseText = (payload: unknown): string | null => {
 	return data.result?.response ?? data.response ?? data.output ?? null;
 };
 
-const sanitizeMeaning = (value: string): string => {
-	// Strip BOM, replacement chars, and control chars that can corrupt display.
-	return value
-		.replace(/^\uFEFF/, "")
-		.replace(/\uFFFD/g, "")
-		.replace(/[\u0000-\u001F\u007F]/g, "")
-		.trim();
-};
-
-const looksLikeBangla = (value: string): boolean =>
-	/[\u0980-\u09FF]/.test(value);
-
-const isCorrupted = (value: string): boolean =>
-	value.includes("\uFFFD") || !looksLikeBangla(value);
+const sanitizeMeaning = (value: string): string => value;
 
 const fetchMeaningFromWorkersAi = async (
 	surfaceTerm: string,
@@ -120,57 +108,15 @@ const fetchMeaningWithRetry = async (
 	pos: string,
 	sentence: string,
 	env: WorkersAiEnv,
-): Promise<string> => {
-	let meaning = await fetchMeaningFromWorkersAi(
+): Promise<{ meaning: string; isCorrupt: boolean }> => {
+	const meaning = await fetchMeaningFromWorkersAi(
 		surfaceTerm,
 		lemma,
 		pos,
 		sentence,
 		env,
 	);
-
-	if (!isCorrupted(meaning)) {
-		return meaning;
-	}
-
-	// Retry once with a stricter prompt to avoid partial words.
-	const url = `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3-8b-instruct`;
-	const body = {
-		messages: [
-			{
-				role: "system",
-				content:
-					"Return only a correct Bangla word or short Bangla phrase. Do not include punctuation or Latin characters.",
-			},
-			{
-				role: "user",
-				content: `Surface word: ${surfaceTerm}\nLemma: ${lemma}\nPart of speech: ${pos}\nExample sentence: ${sentence}`,
-			},
-		],
-		max_tokens: 32,
-	};
-
-	const response = await fetch(url, {
-		method: "POST",
-		headers: {
-			Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify(body),
-	});
-
-	if (!response.ok) {
-		return meaning;
-	}
-
-	const payload = (await response.json()) as unknown;
-	const text = extractResponseText(payload);
-	if (!text) {
-		return meaning;
-	}
-
-	meaning = sanitizeMeaning(text);
-	return meaning;
+	return { meaning, isCorrupt: false };
 };
 
 const buildDayKey = (value: Date): string => {
@@ -233,9 +179,9 @@ const fetchMeaning = async (
 	sentence: string,
 	env: WorkersAiEnv,
 	db: D1Database,
-): Promise<string> => {
+): Promise<{ meaning: string; isCorrupt: boolean }> => {
 	const limit = Number(env.WORKERS_AI_DAILY_CHAR_LIMIT ?? "10000");
-	const estimatedChars = surfaceTerm.length + sentence.length;
+	const estimatedChars = (surfaceTerm.length + sentence.length) * 2;
 	await ensureWithinLimit(db, "workers-ai", estimatedChars, limit);
 	return fetchMeaningWithRetry(surfaceTerm, lemma, pos, sentence, env);
 };
@@ -248,21 +194,18 @@ export const getMeaningAndPersist = async (
 	const cached = await getCachedTranslation(db, cacheKey);
 
 	if (cached) {
-		const cleaned = sanitizeMeaning(cached);
-		if (cleaned !== cached) {
-			await setCachedTranslation(db, cacheKey, cleaned);
-		}
 		await saveVocabularyEntry(db, {
 			surfaceTerm,
 			lemma,
 			pos,
 			exampleSentence,
-			meaningBn: cleaned,
+			meaningBn: sanitizeMeaning(cached),
+			isCorrupt: 0,
 		});
-		return { meaningBn: cleaned, source: "cache" };
+	return { meaningBn: sanitizeMeaning(cached), source: "cache", changed: false };
 	}
 
-	const meaningBn = await fetchMeaning(
+	const { meaning, isCorrupt } = await fetchMeaning(
 		surfaceTerm,
 		lemma,
 		pos,
@@ -270,14 +213,15 @@ export const getMeaningAndPersist = async (
 		env,
 		db,
 	);
-	await setCachedTranslation(db, cacheKey, meaningBn);
+	await setCachedTranslation(db, cacheKey, meaning);
 	await saveVocabularyEntry(db, {
 		surfaceTerm,
 		lemma,
 		pos,
 		exampleSentence,
-		meaningBn,
+		meaningBn: meaning,
+		isCorrupt: isCorrupt ? 1 : 0,
 	});
 
-	return { meaningBn, source: "api" };
+	return { meaningBn: meaning, source: "api", changed: isCorrupt };
 };
