@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getSessionUser } from "@/lib/auth";
 import LogoutButton from "@/components/LogoutButton";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default async function Navbar() {
   const user = await getSessionUser();
@@ -14,11 +15,11 @@ export default async function Navbar() {
   }
   return (
     <nav className="sticky top-0 z-30 border-b border-black/5 bg-white/70 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
         <Link href="/dashboard" className="text-lg font-semibold">
           ReelVocab
         </Link>
-        <div className="flex items-center gap-4 text-sm text-[color:var(--muted)]">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-[color:var(--muted)] sm:justify-end">
           {links.map((link) => (
             <Link
               key={link.href}
@@ -28,6 +29,7 @@ export default async function Navbar() {
               {link.label}
             </Link>
           ))}
+          <ThemeToggle />
           {user ? (
             <LogoutButton />
           ) : (
