@@ -5,7 +5,7 @@
 	"scripts": {
 		"dev": "next dev",
 		"dev:webpack": "next dev --webpack",
-		"dev:cf": "opennextjs-cloudflare dev",
+		"dev:cf": "npm run build && opennextjs-cloudflare preview",
 		"build": "rm -rf .open-next && next build && opennextjs-cloudflare build --skipNextBuild",
 		"build:next": "next build",
 		"build:cf": "opennextjs-cloudflare build",
@@ -15,7 +15,7 @@
 		"upload": "npm run build && opennextjs-cloudflare upload",
 		"preview": "npm run build && opennextjs-cloudflare preview",
 		"cf-typegen": "wrangler types --env-interface CloudflareEnv ./cloudflare-env.d.ts",
-		"migrate:local": "wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0002_vocab_schema.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0004_word_status.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0005_translation_usage.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0006_auth.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0003_seed.sql"
+		"migrate:local": "wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0002_vocab_schema.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0004_word_status.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0005_translation_usage.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0006_auth.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0007_surface_terms.sql && wrangler d1 execute ${DB_NAME:-vocab-db} --local --file migrations/0003_seed.sql"
 	},
 	"dependencies": {
 		"@opennextjs/cloudflare": "^1.16.1",

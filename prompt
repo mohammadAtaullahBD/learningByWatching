@@ -34,14 +34,12 @@ WHAT IS IMPLEMENTED
    - Dashboard progress counts learned terms per user.
 
 5) Translation (Bangla meaning)
-   - Google Translate API supported (GOOGLE_TRANSLATE_API_KEY).
-   - Optional TRANSLATION_API_URL (custom service).
-   - Workers AI fallback if configured (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN).
-   - Monthly usage tracking in D1 (translation_usage) with character limit.
-   - Limit controlled by TRANSLATION_CHAR_LIMIT (default 500000).
+   - Workers AI (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN).
+   - Daily usage tracking in D1 (translation_usage) with estimated character limit.
+   - Limit controlled by WORKERS_AI_DAILY_CHAR_LIMIT (default 10000).
 
 6) Admin Usage Screen
-   - /usage shows current month translation usage + limit (UTC).
+   - /usage shows current day Workers AI usage + limit (UTC).
 
 DEPLOYMENT & CONFIG
 - Build command for CI: npm run build:cf
@@ -57,7 +55,7 @@ MIGRATIONS
 - 0002_vocab_schema.sql (current schema used by app)
 - 0003_seed.sql (demo data; optional)
 - 0004_word_status.sql (status table + pos column)
-- 0005_translation_usage.sql (monthly usage tracking)
+- 0005_translation_usage.sql (usage tracking; now used as daily keys)
 - 0006_auth.sql (users + sessions)
 
 RUNNING LOCAL

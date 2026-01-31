@@ -11,30 +11,31 @@ type UsageRow = {
   month_key: string;
 };
 
-const buildMonthKey = (): string => {
+const buildDayKey = (): string => {
   const now = new Date();
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
+  const day = String(now.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 const getLimit = async (): Promise<number> => {
   const { env } = await getCloudflareContext({ async: true });
-  const limitRaw = (env as CloudflareEnv & { TRANSLATION_CHAR_LIMIT?: string })
-    .TRANSLATION_CHAR_LIMIT;
-  const limit = Number(limitRaw ?? "500000");
-  return Number.isFinite(limit) && limit > 0 ? limit : 500000;
+  const limitRaw = (env as CloudflareEnv & { WORKERS_AI_DAILY_CHAR_LIMIT?: string })
+    .WORKERS_AI_DAILY_CHAR_LIMIT;
+  const limit = Number(limitRaw ?? "10000");
+  return Number.isFinite(limit) && limit > 0 ? limit : 10000;
 };
 
 const fetchUsage = async (): Promise<UsageRow[]> => {
   const db = await getD1Database();
   if (!db) return [];
-  const monthKey = buildMonthKey();
+  const dayKey = buildDayKey();
   const result = await db
     .prepare(
       "SELECT provider, char_count, month_key FROM translation_usage WHERE month_key = ?1",
     )
-    .bind(monthKey)
+    .bind(dayKey)
     .all<UsageRow>();
   return result.results ?? [];
 };
@@ -49,7 +50,7 @@ export default async function UsagePage() {
   }
 
   const [usage, limit] = await Promise.all([fetchUsage(), getLimit()]);
-  const monthKey = buildMonthKey();
+  const dayKey = buildDayKey();
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-10">
@@ -57,23 +58,23 @@ export default async function UsagePage() {
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[color:var(--muted)]">
           Admin Console
         </p>
-        <h1 className="text-4xl font-semibold">Translation Usage</h1>
+        <h1 className="text-4xl font-semibold">Workers AI Usage</h1>
         <p className="text-sm text-[color:var(--muted)]">
-          Current month: {monthKey} (UTC) · Limit: {limit.toLocaleString()} chars
+          Current day: {dayKey} (UTC) · Limit: {limit.toLocaleString()} chars
         </p>
       </header>
 
       <section className="rounded-3xl border border-black/5 bg-white/80 shadow-sm backdrop-blur">
         {usage.length === 0 ? (
           <div className="p-6 text-sm text-[color:var(--muted)]">
-            No translation usage recorded yet.
+            No Workers AI usage recorded yet.
           </div>
         ) : (
           <table className="w-full text-sm">
             <thead className="text-left text-xs uppercase tracking-wide text-[color:var(--muted)]">
               <tr className="border-b border-black/5">
                 <th className="p-4">Provider</th>
-                <th className="p-4">Characters</th>
+                <th className="p-4">Estimated chars</th>
                 <th className="p-4">Usage</th>
               </tr>
             </thead>

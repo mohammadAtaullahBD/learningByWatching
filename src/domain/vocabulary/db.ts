@@ -1,4 +1,5 @@
 export type VocabularyRecord = {
+	surfaceTerm: string;
 	lemma: string;
 	pos: string;
 	exampleSentence: string;
@@ -52,8 +53,14 @@ export const saveVocabularyEntry = async (
 ): Promise<void> => {
 	await db
 		.prepare(
-			"INSERT INTO vocabulary (lemma, pos, example_sentence, meaning_bn) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(lemma, pos, example_sentence) DO UPDATE SET meaning_bn = excluded.meaning_bn, updated_at = CURRENT_TIMESTAMP",
+			"INSERT INTO vocabulary (surface_term, lemma, pos, example_sentence, meaning_bn) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(surface_term, pos) DO UPDATE SET meaning_bn = excluded.meaning_bn, updated_at = CURRENT_TIMESTAMP",
 		)
-		.bind(entry.lemma, entry.pos, entry.exampleSentence, entry.meaningBn)
+		.bind(
+			entry.surfaceTerm,
+			entry.lemma,
+			entry.pos,
+			entry.exampleSentence,
+			entry.meaningBn,
+		)
 		.run();
 };

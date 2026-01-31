@@ -7,7 +7,6 @@ export default async function Navbar() {
   const links = [{ href: "/dashboard", label: "Dashboard" }];
   if (user?.role === "admin") {
     links.push(
-      { href: "/upload", label: "Upload" },
       { href: "/processing", label: "Processing" },
       { href: "/subtitles", label: "Subtitles" },
       { href: "/usage", label: "Usage" },

@@ -35,7 +35,6 @@ type SubtitleEnv = CloudflareEnv & {
   VOCAB_DB?: D1Database;
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_API_TOKEN?: string;
-  TRANSLATION_API_URL?: string;
 };
 
 export async function POST(request: Request): Promise<Response> {

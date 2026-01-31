@@ -5,7 +5,7 @@ Vocabulary-first learning from film/series subtitles. Runs on Cloudflare (D1, R2
 ## Stack
 - Next.js App Router (edge runtime where data is used)
 - OpenNext Cloudflare adapter
-- Cloudflare D1 (vocab + progress), R2 (subtitle files), Queues (async parsing), Workers AI (Bangla meanings) or external translation API
+- Cloudflare D1 (vocab + progress), R2 (subtitle files), Queues (async parsing), Workers AI (Bangla meanings)
 - Tailwind CSS v4
 - wink-nlp for tokenization/POS tagging (Workers compatible)
 
@@ -30,8 +30,8 @@ npm run deploy   # build via OpenNext and push to Cloudflare
 Ensure your account has the same-named resources or adjust `wrangler.jsonc`.
 
 ## Environment / secrets
-- Workers AI (default): set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` as secrets (`wrangler secret put ...`).
-- Custom translation service (optional): set `TRANSLATION_API_URL` in `wrangler.jsonc` or as a secret.
+- Workers AI: set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` as secrets (`wrangler secret put ...`).
+- Optional: set `WORKERS_AI_DAILY_CHAR_LIMIT` in `wrangler.jsonc` (estimated chars, default 10,000).
 
 ## Data flow
 1) Admin uploads subtitle → `/api/subtitles/upload`
@@ -39,7 +39,7 @@ Ensure your account has the same-named resources or adjust `wrangler.jsonc`.
 3) Worker `queue` handler calls `handleSubtitleQueue`:
    - Fetch subtitle from R2
    - Parse sentences/terms, store into D1 (`subtitle_files`, `vocab_terms`, `vocab_occurrences`)
-4) Meaning lookup (Bangla) uses Workers AI or custom API and caches in `translation_cache` + `vocabulary`.
+4) Meaning lookup (Bangla) uses Workers AI and caches in `translation_cache` + `vocabulary`.
 5) Learn pages read from D1 and render vocab per episode/content.
 
 ## Migrations
@@ -49,7 +49,7 @@ Run with: `npm run migrate:local` (uses `DB_NAME` env var, default `vocab-db`).
 
 ## Manual steps you still need
 - Create Cloudflare resources (D1/R2/Queue) and update `wrangler.jsonc` IDs.
-- Add secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (or set `TRANSLATION_API_URL`).
+- Add secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`.
 - If deploying, run `npm run deploy` after the above.
 
 ## Current limitations / next actions

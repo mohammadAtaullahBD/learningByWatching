@@ -1,4 +1,5 @@
 import VocabStatusButtons from "@/components/VocabStatusButtons";
+import AdminVocabEditor from "@/components/AdminVocabEditor";
 import { getD1Database } from "@/lib/d1";
 import { getSessionUser } from "@/lib/auth";
 
@@ -11,10 +12,16 @@ type VocabStatus = (typeof STATUS_OPTIONS)[number];
 
 type VocabRow = {
   word: string;
+  lemma: string | null;
   part_of_speech: string | null;
   meaning: string | null;
   example: string | null;
   status: VocabStatus;
+};
+
+const sanitizeMeaning = (value: string | null): string | null => {
+  if (!value) return value;
+  return value.replace(/^\uFEFF/, "").replace(/\uFFFD/g, "").trim();
 };
 
 async function fetchVocab(
@@ -31,16 +38,17 @@ async function fetchVocab(
     .prepare(
       `SELECT
         o.term as word,
-        COALESCE(MIN(o.pos), v.pos) as part_of_speech,
-        v.meaning_bn as meaning,
+        COALESCE(MAX(o.lemma), v.lemma) as lemma,
+        COALESCE(MAX(o.pos), v.pos) as part_of_speech,
+        COALESCE(MAX(o.meaning_bn_override), v.meaning_bn) as meaning,
         MIN(o.sentence) as example,
         COALESCE(ws.status, 'new') as status
       FROM vocab_occurrences o
-      LEFT JOIN vocabulary v ON v.lemma = o.term
+      LEFT JOIN vocabulary v ON v.surface_term = o.term
       LEFT JOIN word_status ws
         ON ws.user_id = ? AND ws.content_id = o.content_id AND ws.episode_id = o.episode_id AND ws.term = o.term
       WHERE o.content_id = ? AND o.episode_id = ?
-      GROUP BY o.term, ws.status, v.meaning_bn
+      GROUP BY o.term, ws.status, v.meaning_bn, v.pos, v.lemma
       ORDER BY o.term ASC`
     )
     .bind(userId, contentId, episodeId)
@@ -56,8 +64,12 @@ export default async function EpisodeVocabPage({
 }) {
   const user = await getSessionUser();
   const userId = user?.username ?? USER_ID;
+  const isAdmin = user?.role === "admin";
   const { contentId, episodeId } = await params;
-  const vocab = await fetchVocab(contentId, episodeId, userId);
+  const vocab = (await fetchVocab(contentId, episodeId, userId)).map((entry) => ({
+    ...entry,
+    meaning: sanitizeMeaning(entry.meaning),
+  }));
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
@@ -89,12 +101,18 @@ export default async function EpisodeVocabPage({
                 <th className="p-4">Meaning</th>
                 <th className="p-4">Example</th>
                 <th className="p-4">Status</th>
+                {isAdmin && <th className="p-4">Admin</th>}
               </tr>
             </thead>
             <tbody>
               {vocab.map((entry) => (
                 <tr key={entry.word} className="border-b border-black/5 align-top">
-                  <td className="p-4 font-semibold">{entry.word}</td>
+                  <td className="p-4">
+                    <div className="font-semibold">{entry.word}</div>
+                    <div className="text-xs text-[color:var(--muted)]">
+                      lemma: {entry.lemma ?? "—"}
+                    </div>
+                  </td>
                   <td className="p-4 text-[color:var(--muted)]">
                     {entry.part_of_speech ?? "—"}
                   </td>
@@ -112,6 +130,18 @@ export default async function EpisodeVocabPage({
                       disabled={!user}
                     />
                   </td>
+                  {isAdmin && (
+                    <td className="p-4">
+                      <AdminVocabEditor
+                        contentId={contentId}
+                        episodeId={episodeId}
+                        term={entry.word}
+                        lemma={entry.lemma ?? entry.word}
+                        pos={entry.part_of_speech ?? "unknown"}
+                        meaning={entry.meaning ?? ""}
+                      />
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

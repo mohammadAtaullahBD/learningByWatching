@@ -42,7 +42,7 @@
 	//   "consumers": [{ "queue": "vocab-subtitles-queue" }]
 	// },
 	"vars": {
-		"//": "Optional: if you have a custom translation API, set TRANSLATION_API_URL. Otherwise Workers AI is used.",
-		"TRANSLATION_API_URL": ""
+		"//": "Workers AI daily limit (estimated by characters). Set to align with your plan.",
+		"WORKERS_AI_DAILY_CHAR_LIMIT": "10000"
 	}
 }

@@ -5,10 +5,16 @@ export const dynamic = "force-dynamic";
 
 type VocabRow = {
   word: string;
+  lemma: string | null;
   part_of_speech: string | null;
   meaning: string | null;
   example: string | null;
   content_id: string;
+};
+
+const sanitizeMeaning = (value: string | null): string | null => {
+  if (!value) return value;
+  return value.replace(/^\uFEFF/, "").replace(/\uFFFD/g, "").trim();
 };
 
 async function fetchEpisodeVocab(episodeId: string): Promise<VocabRow[]> {
@@ -19,14 +25,15 @@ async function fetchEpisodeVocab(episodeId: string): Promise<VocabRow[]> {
     .prepare(
       `SELECT
         o.term as word,
-        COALESCE(MIN(o.pos), v.pos) as part_of_speech,
-        v.meaning_bn as meaning,
+        COALESCE(MAX(o.lemma), v.lemma) as lemma,
+        COALESCE(MAX(o.pos), v.pos) as part_of_speech,
+        COALESCE(MAX(o.meaning_bn_override), v.meaning_bn) as meaning,
         MIN(o.sentence) as example,
         o.content_id as content_id
       FROM vocab_occurrences o
-      LEFT JOIN vocabulary v ON v.lemma = o.term
+      LEFT JOIN vocabulary v ON v.surface_term = o.term
       WHERE o.episode_id = ?
-      GROUP BY o.term, v.meaning_bn, o.content_id
+      GROUP BY o.term, v.meaning_bn, v.pos, v.lemma, o.content_id
       ORDER BY o.term ASC`,
     )
     .bind(episodeId)
@@ -41,7 +48,10 @@ export default async function EpisodePage({
   params: Promise<{ episodeId: string }>;
 }) {
   const { episodeId } = await params;
-  const words = await fetchEpisodeVocab(episodeId);
+  const words = (await fetchEpisodeVocab(episodeId)).map((entry) => ({
+    ...entry,
+    meaning: sanitizeMeaning(entry.meaning),
+  }));
   const contentId = words[0]?.content_id ?? "unknown";
 
   return (
@@ -67,7 +77,12 @@ export default async function EpisodePage({
           <tbody>
             {words.map((w) => (
               <tr key={w.word} className="border-b border-black/5">
-                <td className="p-4 font-semibold">{w.word}</td>
+                <td className="p-4">
+                  <div className="font-semibold">{w.word}</div>
+                  <div className="text-xs text-[color:var(--muted)]">
+                    lemma: {w.lemma ?? "—"}
+                  </div>
+                </td>
                 <td className="p-4 text-[color:var(--muted)]">
                   {w.part_of_speech ?? "—"}
                 </td>

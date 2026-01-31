@@ -47,26 +47,27 @@ INSERT INTO vocab_terms (term, created_at, updated_at) VALUES
 
 INSERT INTO vocab_occurrences (
   term,
+  lemma,
   content_id,
   episode_id,
   sentence,
   sentence_index,
   created_at
 ) VALUES
-  ('awkward', 'friends', 'friends-ep1', 'That was awkward, but we handled it.', 3, datetime('now', '-2 day')),
-  ('gesture', 'friends', 'friends-ep1', 'She made a kind gesture to break the silence.', 5, datetime('now', '-2 day')),
-  ('legendary', 'friends', 'friends-ep1', 'This story is legendary among the group.', 9, datetime('now', '-2 day')),
-  ('office', 'office', 'office-ep1', 'Welcome to the office where chaos lives.', 2, datetime('now', '-1 day')),
-  ('deadline', 'office', 'office-ep1', 'We cannot miss this deadline again.', 6, datetime('now', '-1 day')),
-  ('prank', 'office', 'office-ep1', 'The prank went too far this time.', 12, datetime('now', '-1 day'));
+  ('awkward', 'awkward', 'friends', 'friends-ep1', 'That was awkward, but we handled it.', 3, datetime('now', '-2 day')),
+  ('gesture', 'gesture', 'friends', 'friends-ep1', 'She made a kind gesture to break the silence.', 5, datetime('now', '-2 day')),
+  ('legendary', 'legendary', 'friends', 'friends-ep1', 'This story is legendary among the group.', 9, datetime('now', '-2 day')),
+  ('office', 'office', 'office', 'office-ep1', 'Welcome to the office where chaos lives.', 2, datetime('now', '-1 day')),
+  ('deadline', 'deadline', 'office', 'office-ep1', 'We cannot miss this deadline again.', 6, datetime('now', '-1 day')),
+  ('prank', 'prank', 'office', 'office-ep1', 'The prank went too far this time.', 12, datetime('now', '-1 day'));
 
-INSERT INTO vocabulary (lemma, pos, example_sentence, meaning_bn) VALUES
-  ('awkward', 'adjective', 'That was awkward, but we handled it.', 'বিব্রতকর'),
-  ('gesture', 'noun', 'She made a kind gesture to break the silence.', 'ইঙ্গিত বা সদয় কাজ'),
-  ('legendary', 'adjective', 'This story is legendary among the group.', 'কিংবদন্তি-সদৃশ'),
-  ('office', 'noun', 'Welcome to the office where chaos lives.', 'অফিস'),
-  ('deadline', 'noun', 'We cannot miss this deadline again.', 'শেষ সময়সীমা'),
-  ('prank', 'noun', 'The prank went too far this time.', 'ঠাট্টা বা প্র্যাঙ্ক');
+INSERT INTO vocabulary (surface_term, lemma, pos, example_sentence, meaning_bn) VALUES
+  ('awkward', 'awkward', 'adjective', 'That was awkward, but we handled it.', 'বিব্রতকর'),
+  ('gesture', 'gesture', 'noun', 'She made a kind gesture to break the silence.', 'ইঙ্গিত বা সদয় কাজ'),
+  ('legendary', 'legendary', 'adjective', 'This story is legendary among the group.', 'কিংবদন্তি-সদৃশ'),
+  ('office', 'office', 'noun', 'Welcome to the office where chaos lives.', 'অফিস'),
+  ('deadline', 'deadline', 'noun', 'We cannot miss this deadline again.', 'শেষ সময়সীমা'),
+  ('prank', 'prank', 'noun', 'The prank went too far this time.', 'ঠাট্টা বা প্র্যাঙ্ক');
 
 INSERT INTO word_status (user_id, content_id, episode_id, term, status)
 VALUES

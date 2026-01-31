@@ -18,6 +18,7 @@ type ProcessingEnv = WorkersAiEnv & { VOCAB_DB: D1Database };
 
 type TokenOccurrence = {
   term: string;
+  lemma: string;
   pos: string;
   sentence: string;
   index: number;
@@ -90,6 +91,7 @@ const insertOccurrence = (
   db: D1Database,
   job: SubtitleUploadJob,
   term: string,
+  lemma: string,
   pos: string,
   sentence: string,
   index: number,
@@ -99,21 +101,25 @@ const insertOccurrence = (
     .prepare(
       `INSERT INTO vocab_occurrences (
         term,
+        lemma,
         pos,
         content_id,
         episode_id,
         sentence,
         sentence_index,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-    .bind(term, pos, job.contentId, job.episodeId, sentence, index, now);
+    .bind(term, lemma, pos, job.contentId, job.episodeId, sentence, index, now);
 
 const buildTokenData = async (sentences: string[]) => {
   const { analyzeSentence } = await import("@/domain/vocabulary/nlp");
   const occurrences: TokenOccurrence[] = [];
   const termSet = new Set<string>();
-  const vocabExamples = new Map<string, { lemma: string; pos: string; sentence: string }>();
+  const vocabExamples = new Map<
+    string,
+    { surfaceTerm: string; lemma: string; pos: string; sentence: string }
+  >();
 
   for (let sentenceIndex = 0; sentenceIndex < sentences.length; sentenceIndex += 1) {
     const sentence = sentences[sentenceIndex];
@@ -122,17 +128,18 @@ const buildTokenData = async (sentences: string[]) => {
       if (!isWordToken(token.value, token.type)) {
         continue;
       }
+      const surfaceTerm = normalizeToken(token.value);
       const lemma = normalizeToken(token.lemma || token.value);
-      if (lemma.length <= 1) {
+      if (surfaceTerm.length <= 1) {
         continue;
       }
       const pos = token.pos ? token.pos.toLowerCase() : "unknown";
-      termSet.add(lemma);
-      occurrences.push({ term: lemma, pos, sentence, index: sentenceIndex });
+      termSet.add(surfaceTerm);
+      occurrences.push({ term: surfaceTerm, lemma, pos, sentence, index: sentenceIndex });
 
-      const key = `${lemma}::${pos}`;
+      const key = `${surfaceTerm}::${pos}`;
       if (!vocabExamples.has(key)) {
-        vocabExamples.set(key, { lemma, pos, sentence });
+        vocabExamples.set(key, { surfaceTerm, lemma, pos, sentence });
       }
     }
   }
@@ -165,6 +172,7 @@ export const processSubtitleText = async (
         VOCAB_DB,
         job,
         occurrence.term,
+        occurrence.lemma,
         occurrence.pos,
         occurrence.sentence,
         occurrence.index,
@@ -180,14 +188,18 @@ export const processSubtitleText = async (
   }
 
   const canTranslate =
-    Boolean(env.TRANSLATION_API_URL) ||
-    (Boolean(env.CLOUDFLARE_ACCOUNT_ID) && Boolean(env.CLOUDFLARE_API_TOKEN));
+    Boolean(env.CLOUDFLARE_ACCOUNT_ID) && Boolean(env.CLOUDFLARE_API_TOKEN);
+
+  if (!canTranslate) {
+    console.warn("Workers AI not configured; skipping Bangla meanings.");
+  }
 
   if (canTranslate && vocabExamples.size > 0) {
     for (const example of vocabExamples.values()) {
       try {
         await getMeaningAndPersist({
           db: VOCAB_DB,
+          surfaceTerm: example.surfaceTerm,
           lemma: example.lemma,
           pos: example.pos,
           exampleSentence: example.sentence,
