@@ -115,14 +115,17 @@ const buildTokenData = async (sentences: string[]) => {
   const termSet = new Set<string>();
   const vocabExamples = new Map<string, { lemma: string; pos: string; sentence: string }>();
 
-  sentences.forEach((sentence, sentenceIndex) => {
-    const { tokens } = analyzeSentence(sentence);
-    tokens.forEach((token) => {
+  for (let sentenceIndex = 0; sentenceIndex < sentences.length; sentenceIndex += 1) {
+    const sentence = sentences[sentenceIndex];
+    const { tokens } = await analyzeSentence(sentence);
+    for (const token of tokens) {
       if (!isWordToken(token.value, token.type)) {
-        return;
+        continue;
       }
       const lemma = normalizeToken(token.lemma || token.value);
-      if (lemma.length <= 1) return;
+      if (lemma.length <= 1) {
+        continue;
+      }
       const pos = token.pos ? token.pos.toLowerCase() : "unknown";
       termSet.add(lemma);
       occurrences.push({ term: lemma, pos, sentence, index: sentenceIndex });
@@ -131,8 +134,8 @@ const buildTokenData = async (sentences: string[]) => {
       if (!vocabExamples.has(key)) {
         vocabExamples.set(key, { lemma, pos, sentence });
       }
-    });
-  });
+    }
+  }
 
   return { occurrences, termSet, vocabExamples };
 };

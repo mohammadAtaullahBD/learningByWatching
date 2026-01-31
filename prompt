@@ -1,110 +1,79 @@
-Feel free to asked me anything to clarify what to do. Here is my plan:
-I am building a web application whose MAIN GOAL is:
-👉 Learning English by memorizing and mastering vocabulary from films and TV series.
-
-This is NOT just a video player project.
-The core of the app is SUBTITLES → WORD ANALYSIS → VOCABULARY LEARNING → PROGRESS TRACKING.
-
 --------------------------------------------------
-MAIN GOAL (VERY IMPORTANT)
+PROJECT STATUS SUMMARY (2026-01-31)
 --------------------------------------------------
 
-My primary goal is to learn English vocabulary effectively.
+GOAL
+- Build a Cloudflare-first Next.js app to learn vocabulary from film/series subtitles.
+- Core flow: upload subtitle -> parse -> store vocab -> learn -> track progress.
 
-The learning flow is:
+WHAT IS IMPLEMENTED
+1) Upload + Processing
+   - Admin uploads subtitle at /upload (R2 storage).
+   - Processing queue OR inline processing:
+     - If Cloudflare Queue is configured, job is enqueued.
+     - If not, processing runs inline on upload.
+   - Subtitle parsing extracts sentences and terms.
+   - POS tagging + lemma extraction with wink-nlp (lazy-loaded).
+   - Occurrences stored in D1 (vocab_occurrences + vocab_terms + subtitle_files).
 
-1. I (as ADMIN) upload a subtitle file for a movie or TV episode.
-2. The website processes the subtitle file.
-3. The system extracts ALL words.
-4. The system:
-   - Categorizes words by PART OF SPEECH (noun, verb, adjective, adverb, preposition, conjunction, phrase etc.)
-   - Finds the BEST CONTEXTUAL MEANING related to the film
-   - Translates meanings into BANGLA (Bangladesh context)
-5. Users learn words film-by-film or series-by-series.
-6. User progress is tracked over time.
+2) Vocabulary + Learning Pages (D1-backed)
+   - /dashboard: shows content + progress stats (per user when logged in).
+   - /film/[filmId]: shows episodes for a contentId from D1.
+   - /[contentId]/[episodeId]: shows vocab list with meanings + status buttons.
+   - /episode/[episodeId]: direct episode vocab view (legacy route).
 
+3) Authentication + Roles
+   - Username/password auth (no email).
+   - First registered user becomes ADMIN.
+   - Admin-only: /upload, /processing, /subtitles, /usage, and upload API.
+   - Sessions stored in D1; cookie-based session token.
 
---------------------------------------------------
-CONTENT STRUCTURE
---------------------------------------------------
+4) Progress Tracking
+   - word_status table: per-user status (new/learned/weak).
+   - Status buttons persist through /api/vocab/status.
+   - Dashboard progress counts learned terms per user.
 
-Content hierarchy must be:
+5) Translation (Bangla meaning)
+   - Google Translate API supported (GOOGLE_TRANSLATE_API_KEY).
+   - Optional TRANSLATION_API_URL (custom service).
+   - Workers AI fallback if configured (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN).
+   - Monthly usage tracking in D1 (translation_usage) with character limit.
+   - Limit controlled by TRANSLATION_CHAR_LIMIT (default 500000).
 
-- Movies
-  - Movie
-    - Subtitle file (only for admin user)
-    - Vocabulary list (derived from subtitle)
+6) Admin Usage Screen
+   - /usage shows current month translation usage + limit (UTC).
 
-- Series
-  - Series
-    - Season
-      - Episode
-        - Subtitle file (only for admin user)
-        - Vocabulary list
+DEPLOYMENT & CONFIG
+- Build command for CI: npm run build:cf
+- Deploy command: npx wrangler deploy
+- Custom domain: learn.ataullah.dev -> worker "vocab".
 
-Words must be organized so users can study:
-- Movie by movie
-- Series by series
-- Season by season
-- Episode by episode
+REQUIRED CLOUD RESOURCES
+- D1: vocab-db (binding: VOCAB_DB)
+- R2: vocab-subtitles (binding: SUBTITLE_BUCKET)
+- Optional Queue: vocab-subtitles-queue (binding: SUBTITLE_QUEUE)
 
---------------------------------------------------
-WORD PROCESSING REQUIREMENTS
---------------------------------------------------
+MIGRATIONS
+- 0002_vocab_schema.sql (current schema used by app)
+- 0003_seed.sql (demo data; optional)
+- 0004_word_status.sql (status table + pos column)
+- 0005_translation_usage.sql (monthly usage tracking)
+- 0006_auth.sql (users + sessions)
 
-For each subtitle file:
+RUNNING LOCAL
+- npm run migrate:local
+- npm run dev:webpack (Turbopack still crashes)
 
-- Parse subtitle (prefer `.vtt`, `.txt`, but `.srt` may exist)
-- Clean text (remove timestamps, noise)
-- Tokenize words
-- Normalize (lowercase, base form / lemma)
-- Remove duplicates
-- Identify:
-  - Part of speech (POS tagging)
-  - Contextual meaning (based on sentence usage)
-- Map best BANGLA meaning (not dictionary dump, but context-aware)
+KNOWN ISSUE (ACTIVE)
+- Production error: "Cannot read properties of undefined (reading 'default')"
+  Suspected cause: CJS/ESM default import issue from wink-nlp model.
+  Fix applied: lazy-load NLP by dynamic import inside processing only.
+  File changed: src/lib/subtitles/queue.ts
+  Next step: push + deploy, then re-test /dashboard.
 
-Words should be stored with:
-- Original word
-- Base form
-- Part of speech
-- Example sentence (from subtitle)
-- Bangla meaning
-- Source (movie/series/season/episode)
-
---------------------------------------------------
-USER LEARNING & PROGRESS TRACKING
---------------------------------------------------
-
-The system must track per user:
-- Which words they have seen
-- Which words they marked as learned
-- Which words they revised
-- Learning progress per:
-  - Movie
-  - Series
-  - Season
-  - Episode
-
-The UI will later show:
-- New words
-- Learned words
-- Weak words
-- Progress percentage
+NEXT STEPS (IF ERROR PERSISTS)
+- Use wrangler tail to get full error logs:
+  wrangler tail vocab --format json
+- If error persists after deploy, check module causing "default" error.
 
 --------------------------------------------------
-TECH STACK
---------------------------------------------------
-
-- Next.js (App Router)
-- Tailwind CSS
-- Cloudflare Workers / Pages (NOT Vercel)
-- Wrangler
-- No Node-only APIs (Cloudflare-compatible only)
-
-
-ASSUME:
-- Vocabulary learning is the CORE feature
-- Everything else supports this goal
-- Solutions should be SIMPLE, CORRECT, and FUTURE-PROOF
-- UI could be simple, modern, and beautiful
