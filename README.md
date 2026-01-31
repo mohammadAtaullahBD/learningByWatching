@@ -1,11 +1,11 @@
 # ReelVocab (Cloudflare + OpenNext)
 
-Vocabulary-first learning from film/series subtitles. Runs on Cloudflare (D1, R2, Queues, Workers AI) via OpenNext.
+Vocabulary-first learning from film/series subtitles. Runs on Cloudflare (D1, R2, Queues, Google Translate API) via OpenNext.
 
 ## Stack
 - Next.js App Router (edge runtime where data is used)
 - OpenNext Cloudflare adapter
-- Cloudflare D1 (vocab + progress), R2 (subtitle files), Queues (async parsing), Workers AI (Bangla meanings)
+- Cloudflare D1 (vocab + progress), R2 (subtitle files), Queues (async parsing), Google Translate API (Bangla meanings)
 - Tailwind CSS v4
 - wink-nlp for tokenization/POS tagging (Workers compatible)
 
@@ -30,8 +30,14 @@ npm run deploy   # build via OpenNext and push to Cloudflare
 Ensure your account has the same-named resources or adjust `wrangler.jsonc`.
 
 ## Environment / secrets
-- Workers AI: set `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN` as secrets (`wrangler secret put ...`).
-- Optional: set `WORKERS_AI_DAILY_CHAR_LIMIT` in `wrangler.jsonc` (estimated chars, default 10,000).
+Google Cloud Translation API (v2 with API key):
+1) Create a Google Cloud project.
+2) Enable the **Cloud Translation API**.
+3) Create an **API key** (APIs & Services → Credentials → Create credentials → API key).
+4) Add secrets/vars for your worker:
+   - `GOOGLE_TRANSLATE_API_KEY` (the API key)
+   - Optional: `GOOGLE_TRANSLATE_PROJECT_ID` (kept for reference, not required for v2)
+   - Optional: `GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT` (estimated chars, default 10,000)
 
 ## Data flow
 1) Admin uploads subtitle → `/api/subtitles/upload`
@@ -39,7 +45,7 @@ Ensure your account has the same-named resources or adjust `wrangler.jsonc`.
 3) Worker `queue` handler calls `handleSubtitleQueue`:
    - Fetch subtitle from R2
    - Parse sentences/terms, store into D1 (`subtitle_files`, `vocab_terms`, `vocab_occurrences`)
-4) Meaning lookup (Bangla) uses Workers AI and caches in `translation_cache` + `vocabulary`.
+4) Meaning lookup (Bangla) is triggered manually from the admin subtitles page and caches in `translation_cache` + `vocabulary`.
 5) Learn pages read from D1 and render vocab per episode/content.
 
 ## Migrations
@@ -49,7 +55,7 @@ Run with: `npm run migrate:local` (uses `DB_NAME` env var, default `vocab-db`).
 
 ## Manual steps you still need
 - Create Cloudflare resources (D1/R2/Queue) and update `wrangler.jsonc` IDs.
-- Add secrets: `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`.
+- Add secrets: `GOOGLE_TRANSLATE_PROJECT_ID`, `GOOGLE_TRANSLATE_API_KEY`.
 - If deploying, run `npm run deploy` after the above.
 
 ## Current limitations / next actions

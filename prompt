@@ -3,29 +3,46 @@ PROJECT STATUS SUMMARY (2026-01-31)
 --------------------------------------------------
 
 GOAL
-- Build a Cloudflare-first Next.js app to learn vocabulary from film/series subtitles.
-- Core flow: upload subtitle -> parse -> store vocab -> learn -> track progress.
+Build a Cloudflare-first Next.js app to learn vocabulary from film/series subtitles.
+Core flow: upload subtitle -> parse -> store vocab -> learn -> track progress.
 
-WHAT IS IMPLEMENTED
+MY PLAN (NEXT IMPLEMENTATIONS)
+1) Quality controls
+   - Add a reprocess/retranslate tool per episode/pack to refresh meanings.
+   - Add better meaning QA (optional validation model or secondary source) and admin review workflow.
+
+2) Admin tools
+   - Improve subtitle library: search, filters, pagination.
+   - Add bulk actions (delete pack, reprocess pack, export vocab).
+
+3) Learning experience
+   - Improve vocab list UX (sorting, filters by POS/status).
+   - Add spaced repetition / review queue and progress charts.
+
+4) Reliability & ops
+   - Add background job metrics and processing logs.
+   - Improve cache/usage monitoring for Google Translate.
+
+WHAT IS IMPLEMENTED (HISTORY OF IMPLEMENTATION)
 1) Upload + Processing
-   - Admin uploads subtitle at /upload (R2 storage).
-   - Processing queue OR inline processing:
-     - If Cloudflare Queue is configured, job is enqueued.
-     - If not, processing runs inline on upload.
+   - Admin uploads subtitles at /subtitles (R2 storage).
+   - Processing runs inline when queue is absent; queue handler supported when configured.
    - Subtitle parsing extracts sentences and terms.
    - POS tagging + lemma extraction with wink-nlp (lazy-loaded).
    - Occurrences stored in D1 (vocab_occurrences + vocab_terms + subtitle_files).
 
 2) Vocabulary + Learning Pages (D1-backed)
-   - /dashboard: shows content + progress stats (per user when logged in).
+   - /dashboard: shows content + progress stats.
    - /film/[filmId]: shows episodes for a contentId from D1.
    - /[contentId]/[episodeId]: shows vocab list with meanings + status buttons.
-   - /episode/[episodeId]: direct episode vocab view (legacy route).
+   - /episode/[episodeId]: legacy episode vocab view.
+   - Word rows show surface form + lemma.
+   - “Report” button for all users marks a word as corrupted.
 
 3) Authentication + Roles
    - Username/password auth (no email).
    - First registered user becomes ADMIN.
-   - Admin-only: /upload, /processing, /subtitles, /usage, and upload API.
+   - Admin-only: /subtitles, /processing, /usage, and upload API.
    - Sessions stored in D1; cookie-based session token.
 
 4) Progress Tracking
@@ -34,17 +51,27 @@ WHAT IS IMPLEMENTED
    - Dashboard progress counts learned terms per user.
 
 5) Translation (Bangla meaning)
-   - Workers AI (CLOUDFLARE_ACCOUNT_ID, CLOUDFLARE_API_TOKEN).
-   - Daily usage tracking in D1 (translation_usage) with estimated character limit.
-   - Limit controlled by WORKERS_AI_DAILY_CHAR_LIMIT (default 10000).
+   - Google Translate API v2 (API key).
+   - Meanings cached in translation_cache + vocabulary.
+   - Daily usage tracking in D1 (translation_usage).
+   - Limit controlled by GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT (default 10000).
+   - Meanings are generated on-demand via admin action (not during upload).
 
-6) Admin Usage Screen
-   - /usage shows current day Workers AI usage + limit (UTC).
+6) Admin Tools
+   - /subtitles includes upload + list + delete pack action.
+   - Admin can edit lemma/pos/meaning per word.
+   - Admin can mark word OK or delete word.
+   - /usage shows current day Google Translate usage + limit (UTC).
+
+7) Data Model Extensions
+   - Store surface term + lemma per occurrence.
+   - Support meaning overrides per occurrence.
+   - Track corruption flags for vocab and overrides.
 
 DEPLOYMENT & CONFIG
-- Build command for CI: npm run build:cf
-- Deploy command: npx wrangler deploy
-- Custom domain: learn.ataullah.dev -> worker "vocab".
+- Build command for CI: npm run build
+- Deploy command: npm run deploy
+- Custom domain: learn.ataullah.dev -> worker "vocab"
 
 REQUIRED CLOUD RESOURCES
 - D1: vocab-db (binding: VOCAB_DB)
@@ -52,26 +79,26 @@ REQUIRED CLOUD RESOURCES
 - Optional Queue: vocab-subtitles-queue (binding: SUBTITLE_QUEUE)
 
 MIGRATIONS
-- 0002_vocab_schema.sql (current schema used by app)
+- 0002_vocab_schema.sql (base schema)
 - 0003_seed.sql (demo data; optional)
 - 0004_word_status.sql (status table + pos column)
-- 0005_translation_usage.sql (usage tracking; now used as daily keys)
+- 0005_translation_usage.sql (usage tracking)
 - 0006_auth.sql (users + sessions)
+- 0007_surface_terms.sql (surface term + lemma storage)
+- 0008_corruption_flags.sql (corrupt flags)
 
 RUNNING LOCAL
 - npm run migrate:local
-- npm run dev:webpack (Turbopack still crashes)
+- npm run dev:cf (uses Wrangler preview + .dev.vars)
 
-KNOWN ISSUE (ACTIVE)
-- Production error: "Cannot read properties of undefined (reading 'default')"
-  Suspected cause: CJS/ESM default import issue from wink-nlp model.
-  Fix applied: lazy-load NLP by dynamic import inside processing only.
-  File changed: src/lib/subtitles/queue.ts
-  Next step: push + deploy, then re-test /dashboard.
+LOCAL ENV (.dev.vars)
+NEXTJS_ENV=development
+GOOGLE_TRANSLATE_API_KEY=...
+GOOGLE_TRANSLATE_PROJECT_ID=...
+GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT=10000
 
-NEXT STEPS (IF ERROR PERSISTS)
-- Use wrangler tail to get full error logs:
-  wrangler tail vocab --format json
-- If error persists after deploy, check module causing "default" error.
+NOTES
+- Meanings are generated on processing; reupload/reprocess to refresh.
+- Reported words are hidden from normal users; admins review via filter.
 
 --------------------------------------------------

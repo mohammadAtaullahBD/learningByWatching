@@ -1,8 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getSessionUser } from "@/lib/auth";
 
-
-const allowedStatuses = new Set(["new", "learned", "weak"]);
+const allowedStatuses = new Set(["weak"]);
 
 type StatusPayload = {
   contentId?: string;

@@ -5,10 +5,11 @@ import {
 	setCachedTranslation,
 } from "./db";
 
-export type WorkersAiEnv = {
-	CLOUDFLARE_ACCOUNT_ID?: string;
-	CLOUDFLARE_API_TOKEN?: string;
-	WORKERS_AI_DAILY_CHAR_LIMIT?: string;
+export type GoogleTranslateEnv = {
+	GOOGLE_TRANSLATE_PROJECT_ID?: string;
+	GOOGLE_TRANSLATE_API_KEY?: string;
+	GOOGLE_TRANSLATE_LOCATION?: string;
+	GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT?: string;
 };
 
 type MeaningRequest = {
@@ -17,7 +18,7 @@ type MeaningRequest = {
 	lemma: string;
 	pos: string;
 	exampleSentence: string;
-	env: WorkersAiEnv;
+	env: GoogleTranslateEnv;
 };
 
 type MeaningResponse = {
@@ -33,70 +34,67 @@ type UsageRow = {
 const buildCacheKey = (surfaceTerm: string, pos: string): string =>
 	`${surfaceTerm.toLowerCase()}::${pos.toLowerCase()}`;
 
-const extractResponseText = (payload: unknown): string | null => {
+const extractTranslatedText = (payload: unknown): string | null => {
 	if (!payload || typeof payload !== "object") {
 		return null;
 	}
 
 	const data = payload as {
-		result?: { response?: string };
-		response?: string;
-		output?: string;
+		data?: { translations?: Array<{ translatedText?: string }> };
 	};
 
-	return data.result?.response ?? data.response ?? data.output ?? null;
+	return data.data?.translations?.[0]?.translatedText ?? null;
 };
 
 const sanitizeMeaning = (value: string): string => value;
 
-const fetchMeaningFromWorkersAi = async (
+const fetchMeaningFromGoogleTranslate = async (
 	surfaceTerm: string,
 	lemma: string,
 	pos: string,
 	sentence: string,
-	env: WorkersAiEnv,
+	env: GoogleTranslateEnv,
 ): Promise<string> => {
-	if (!env.CLOUDFLARE_ACCOUNT_ID || !env.CLOUDFLARE_API_TOKEN) {
+	const apiKey = env.GOOGLE_TRANSLATE_API_KEY?.trim();
+	if (!apiKey) {
 		throw new Error(
-			"Missing CLOUDFLARE_ACCOUNT_ID or CLOUDFLARE_API_TOKEN for Workers AI call.",
+			"Missing GOOGLE_TRANSLATE_API_KEY for Google Translate call.",
 		);
 	}
 
-	const url = `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3-8b-instruct`;
+	const url = `https://translation.googleapis.com/language/translate/v2?key=${encodeURIComponent(apiKey)}`;
 	const body = {
-		messages: [
-			{
-				role: "system",
-				content:
-					"You are a linguistics assistant. Respond with a concise Bangla meaning for the target word in context. Return only Bangla text.",
-			},
-			{
-				role: "user",
-				content: `Surface word: ${surfaceTerm}\nLemma: ${lemma}\nPart of speech: ${pos}\nExample sentence: ${sentence}`,
-			},
-		],
-		max_tokens: 64,
+		q: surfaceTerm,
+		source: "en",
+		target: "bn",
+		format: "text",
 	};
 
 	const response = await fetch(url, {
 		method: "POST",
 		headers: {
-			Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify(body),
 	});
 
 	if (!response.ok) {
+		const details = await response.text().catch(() => "");
 		throw new Error(
-			`Workers AI request failed with status ${response.status}.`,
+			`Google Translate request failed with status ${response.status}. ${details}`,
 		);
 	}
 
 	const payload = (await response.json()) as unknown;
-	const text = extractResponseText(payload);
+	const errorPayload = payload as { error?: { message?: string } };
+	if (errorPayload.error?.message) {
+		throw new Error(
+			`Google Translate request failed: ${errorPayload.error.message}`,
+		);
+	}
+	const text = extractTranslatedText(payload);
 	if (!text) {
-		throw new Error("Workers AI response did not include text.");
+		throw new Error("Google Translate response did not include text.");
 	}
 
 	return sanitizeMeaning(text);
@@ -107,9 +105,9 @@ const fetchMeaningWithRetry = async (
 	lemma: string,
 	pos: string,
 	sentence: string,
-	env: WorkersAiEnv,
+	env: GoogleTranslateEnv,
 ): Promise<{ meaning: string; isCorrupt: boolean }> => {
-	const meaning = await fetchMeaningFromWorkersAi(
+	const meaning = await fetchMeaningFromGoogleTranslate(
 		surfaceTerm,
 		lemma,
 		pos,
@@ -167,7 +165,7 @@ const ensureWithinLimit = async (
 	const dayKey = buildDayKey(new Date());
 	const used = await getUsageCount(db, dayKey, provider);
 	if (used + charCount > limit) {
-		throw new Error("Daily Workers AI translation limit reached.");
+		throw new Error("Daily Google Translate limit reached.");
 	}
 	await incrementUsage(db, dayKey, provider, charCount);
 };
@@ -177,12 +175,12 @@ const fetchMeaning = async (
 	lemma: string,
 	pos: string,
 	sentence: string,
-	env: WorkersAiEnv,
+	env: GoogleTranslateEnv,
 	db: D1Database,
 ): Promise<{ meaning: string; isCorrupt: boolean }> => {
-	const limit = Number(env.WORKERS_AI_DAILY_CHAR_LIMIT ?? "10000");
-	const estimatedChars = (surfaceTerm.length + sentence.length) * 2;
-	await ensureWithinLimit(db, "workers-ai", estimatedChars, limit);
+	const limit = Number(env.GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT ?? "10000");
+	const estimatedChars = surfaceTerm.length;
+	await ensureWithinLimit(db, "google-translate", estimatedChars, limit);
 	return fetchMeaningWithRetry(surfaceTerm, lemma, pos, sentence, env);
 };
 

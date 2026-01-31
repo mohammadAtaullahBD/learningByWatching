@@ -42,19 +42,24 @@ async function fetchStats(userId: string | null): Promise<StatsRow> {
   }
 
   const totals = await db
-    .prepare("SELECT COUNT(DISTINCT term) as total FROM vocab_occurrences")
+    .prepare(
+      "SELECT COUNT(DISTINCT COALESCE(lemma, term)) as total FROM vocab_occurrences",
+    )
     .first<{ total: number }>();
 
   const learned = await db
     .prepare(
-      "SELECT COUNT(DISTINCT term) as learned FROM word_status WHERE status = 'learned' AND user_id = ?1",
+      "SELECT COUNT(DISTINCT lemma) as learned FROM user_lemma_status WHERE status = 'learned' AND user_id = ?1",
     )
     .bind(userId)
     .first<{ learned: number }>();
 
   const episodes = await db
     .prepare(
-      "SELECT COUNT(DISTINCT episode_id) as episodes FROM word_status WHERE status = 'learned' AND user_id = ?1",
+      `SELECT COUNT(DISTINCT o.episode_id) as episodes
+       FROM user_lemma_status ls
+       JOIN vocab_occurrences o ON COALESCE(o.lemma, o.term) = ls.lemma
+       WHERE ls.status = 'learned' AND ls.user_id = ?1`,
     )
     .bind(userId)
     .first<{ episodes: number }>();

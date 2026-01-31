@@ -1,4 +1,4 @@
-import { getMeaningAndPersist, type WorkersAiEnv } from "@/domain/vocabulary/meaning";
+import type { GoogleTranslateEnv } from "@/domain/vocabulary/meaning";
 import { parseSubtitleText } from "./processing";
 
 export type SubtitleUploadJob = {
@@ -14,7 +14,7 @@ type SubtitleQueueEnv = CloudflareEnv & {
   VOCAB_DB: D1Database;
 };
 
-type ProcessingEnv = WorkersAiEnv & { VOCAB_DB: D1Database };
+type ProcessingEnv = GoogleTranslateEnv & { VOCAB_DB: D1Database };
 
 type TokenOccurrence = {
   term: string;
@@ -187,38 +187,7 @@ export const processSubtitleText = async (
     }
   }
 
-  const canTranslate =
-    Boolean(env.CLOUDFLARE_ACCOUNT_ID) && Boolean(env.CLOUDFLARE_API_TOKEN);
-
-  if (!canTranslate) {
-    console.warn("Workers AI not configured; skipping Bangla meanings.");
-  }
-
-  if (canTranslate && vocabExamples.size > 0) {
-    for (const example of vocabExamples.values()) {
-      try {
-        const meaningResult = await getMeaningAndPersist({
-          db: VOCAB_DB,
-          surfaceTerm: example.surfaceTerm,
-          lemma: example.lemma,
-          pos: example.pos,
-          exampleSentence: example.sentence,
-          env,
-        });
-        if (meaningResult.changed) {
-          await VOCAB_DB.prepare(
-            `UPDATE vocab_occurrences
-             SET is_corrupt_override = 1
-             WHERE content_id = ?1 AND episode_id = ?2 AND term = ?3`,
-          )
-            .bind(job.contentId, job.episodeId, example.surfaceTerm)
-            .run();
-        }
-      } catch (error) {
-        // Skip meaning failures so processing can complete.
-      }
-    }
-  }
+  // Meanings are now generated on-demand via the admin action.
 
   return { sentenceCount: parsed.sentences.length, termCount: termSet.size };
 };

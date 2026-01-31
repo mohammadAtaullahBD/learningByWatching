@@ -1,6 +1,7 @@
-import VocabStatusButtons from "@/components/VocabStatusButtons";
 import AdminVocabEditor from "@/components/AdminVocabEditor";
 import ReportWordButton from "@/components/ReportWordButton";
+import VocabQuiz from "@/components/VocabQuiz";
+import VocabStatusBadge from "@/components/VocabStatusBadge";
 import { getD1Database } from "@/lib/d1";
 import { getSessionUser } from "@/lib/auth";
 import Link from "next/link";
@@ -8,9 +9,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 const USER_ID = "default";
-const STATUS_OPTIONS = ["new", "learned", "weak"] as const;
-
-type VocabStatus = (typeof STATUS_OPTIONS)[number];
+type VocabStatus = "new" | "learned" | "weak";
 
 type VocabRow = {
   word: string;
@@ -20,6 +19,12 @@ type VocabRow = {
   example: string | null;
   status: VocabStatus;
   is_corrupt: number;
+};
+
+type QuizStatsRow = {
+  attempts: number;
+  correct: number;
+  wrong: number;
 };
 
 const isCorruptedMeaning = (value: string | null, flag: number): boolean =>
@@ -44,19 +49,50 @@ async function fetchVocab(
         COALESCE(MAX(o.meaning_bn_override), v.meaning_bn) as meaning,
         COALESCE(MAX(o.is_corrupt_override), v.is_corrupt, 0) as is_corrupt,
         MIN(o.sentence) as example,
-        COALESCE(ws.status, 'new') as status
+        CASE
+          WHEN MAX(CASE WHEN ws.status = 'weak' THEN 1 ELSE 0 END) = 1 THEN 'weak'
+          WHEN MAX(CASE WHEN ls.status = 'learned' OR ws.status = 'learned' THEN 1 ELSE 0 END) = 1 THEN 'learned'
+          ELSE 'new'
+        END as status
       FROM vocab_occurrences o
       LEFT JOIN vocabulary v ON v.surface_term = o.term
       LEFT JOIN word_status ws
         ON ws.user_id = ? AND ws.content_id = o.content_id AND ws.episode_id = o.episode_id AND ws.term = o.term
+      LEFT JOIN user_lemma_status ls
+        ON ls.user_id = ? AND ls.lemma = COALESCE(o.lemma, v.lemma, o.term)
       WHERE o.content_id = ? AND o.episode_id = ?
-      GROUP BY o.term, ws.status, v.meaning_bn, v.pos, v.lemma, v.is_corrupt
-      ORDER BY o.term ASC`
+      GROUP BY o.term, v.meaning_bn, v.pos, v.lemma, v.is_corrupt
+      ORDER BY COALESCE(MAX(o.lemma), v.lemma, o.term) ASC, o.term ASC`
     )
-    .bind(userId, contentId, episodeId)
+    .bind(userId, userId, contentId, episodeId)
     .all<VocabRow>();
 
   return result.results ?? [];
+}
+
+async function fetchQuizStats(
+  contentId: string,
+  episodeId: string,
+  userId: string,
+): Promise<QuizStatsRow> {
+  const db = await getD1Database();
+  if (!db) {
+    return { attempts: 0, correct: 0, wrong: 0 };
+  }
+
+  const row = await db
+    .prepare(
+      `SELECT
+        COALESCE(SUM(seen_count), 0) as attempts,
+        COALESCE(SUM(correct_count), 0) as correct,
+        COALESCE(SUM(wrong_count), 0) as wrong
+       FROM user_quiz_stats
+       WHERE user_id = ?1 AND content_id = ?2 AND episode_id = ?3`,
+    )
+    .bind(userId, contentId, episodeId)
+    .first<QuizStatsRow>();
+
+  return row ?? { attempts: 0, correct: 0, wrong: 0 };
 }
 
 export default async function EpisodeVocabPage({
@@ -72,13 +108,25 @@ export default async function EpisodeVocabPage({
   const { contentId, episodeId } = await params;
   const { filter } = (await searchParams) ?? {};
   const filterCorrupt = filter === "corrupt";
-  const vocabRaw = await fetchVocab(contentId, episodeId, userId);
+  const [vocabRaw, quizStats] = await Promise.all([
+    fetchVocab(contentId, episodeId, userId),
+    user ? fetchQuizStats(contentId, episodeId, userId) : Promise.resolve({ attempts: 0, correct: 0, wrong: 0 }),
+  ]);
   const vocab = vocabRaw.filter((entry) => {
     const corrupted = isCorruptedMeaning(entry.meaning, entry.is_corrupt);
     if (isAdmin && filterCorrupt) return corrupted;
     if (isAdmin) return true;
     return !corrupted;
   });
+  const totalCount = vocab.length;
+  const learnedCount = vocab.filter((entry) => entry.status === "learned").length;
+  const weakCount = vocab.filter((entry) => entry.status === "weak").length;
+  const newCount = vocab.filter((entry) => entry.status === "new").length;
+  const masteryPct = totalCount > 0 ? Math.round((learnedCount / totalCount) * 100) : 0;
+  const quizAccuracy =
+    quizStats.attempts > 0
+      ? Math.round((quizStats.correct / quizStats.attempts) * 100)
+      : null;
 
   return (
     <main className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10">
@@ -110,10 +158,40 @@ export default async function EpisodeVocabPage({
         </div>
       )}
 
-      <section className="overflow-x-auto rounded-3xl border border-black/5 bg-white/80 shadow-sm backdrop-blur">
+      <VocabQuiz contentId={contentId} episodeId={episodeId} disabled={!user} />
+
+      <section
+        id="word-list"
+        className="vocab-list overflow-x-auto rounded-3xl border border-black/5 bg-white/80 shadow-sm backdrop-blur"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-black/5 px-6 py-4 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--muted)]">
+            Episode stats
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-[color:var(--muted)]">
+              Total {totalCount}
+            </span>
+            <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-[color:var(--muted)]">
+              New {newCount}
+            </span>
+            <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-[color:var(--muted)]">
+              Weak {weakCount}
+            </span>
+            <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-[color:var(--muted)]">
+              Learned {learnedCount}
+            </span>
+            <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-[color:var(--muted)]">
+              Mastery {masteryPct}%
+            </span>
+            <span className="rounded-full border border-black/10 bg-white px-3 py-1 text-[color:var(--muted)]">
+              Quiz accuracy {quizAccuracy === null ? "—" : `${quizAccuracy}%`}
+            </span>
+          </div>
+        </div>
         {!user && (
           <div className="border-b border-black/5 px-6 py-3 text-xs text-[color:var(--muted)]">
-            Sign in to save learned/weak status.
+            Sign in to take the test and track status.
           </div>
         )}
         {vocab.length === 0 ? (
@@ -139,11 +217,6 @@ export default async function EpisodeVocabPage({
                   <td className="p-4">
                     <div className="flex items-center gap-1">
                       <span className="font-semibold">{entry.word}</span>
-                      <ReportWordButton
-                        contentId={contentId}
-                        episodeId={episodeId}
-                        term={entry.word}
-                      />
                     </div>
                     <div className="text-xs text-[color:var(--muted)]">
                       lemma: {entry.lemma ?? "—"}
@@ -166,14 +239,7 @@ export default async function EpisodeVocabPage({
                     {entry.example ?? "—"}
                   </td>
                   <td className="p-4">
-                    <VocabStatusButtons
-                      contentId={contentId}
-                      episodeId={episodeId}
-                      term={entry.word}
-                      initialStatus={entry.status}
-                      options={STATUS_OPTIONS}
-                      disabled={!user}
-                    />
+                    <VocabStatusBadge status={entry.status} />
                   </td>
                   {isAdmin && (
                     <td className="p-4">

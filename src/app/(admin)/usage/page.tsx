@@ -21,8 +21,8 @@ const buildDayKey = (): string => {
 
 const getLimit = async (): Promise<number> => {
   const { env } = await getCloudflareContext({ async: true });
-  const limitRaw = (env as CloudflareEnv & { WORKERS_AI_DAILY_CHAR_LIMIT?: string })
-    .WORKERS_AI_DAILY_CHAR_LIMIT;
+  const limitRaw = (env as CloudflareEnv & { GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT?: string })
+    .GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT;
   const limit = Number(limitRaw ?? "10000");
   return Number.isFinite(limit) && limit > 0 ? limit : 10000;
 };
@@ -33,7 +33,7 @@ const fetchUsage = async (): Promise<UsageRow[]> => {
   const dayKey = buildDayKey();
   const result = await db
     .prepare(
-      "SELECT provider, char_count, month_key FROM translation_usage WHERE month_key = ?1",
+      "SELECT provider, char_count, month_key FROM translation_usage WHERE month_key = ?1 AND provider = 'google-translate'",
     )
     .bind(dayKey)
     .all<UsageRow>();
@@ -58,7 +58,7 @@ export default async function UsagePage() {
         <p className="text-xs font-semibold uppercase tracking-[0.3em] text-[color:var(--muted)]">
           Admin Console
         </p>
-        <h1 className="text-4xl font-semibold">Workers AI Usage</h1>
+        <h1 className="text-4xl font-semibold">Google Translate Usage</h1>
         <p className="text-sm text-[color:var(--muted)]">
           Current day: {dayKey} (UTC) · Limit: {limit.toLocaleString()} chars
         </p>
@@ -67,7 +67,7 @@ export default async function UsagePage() {
       <section className="rounded-3xl border border-black/5 bg-white/80 shadow-sm backdrop-blur">
         {usage.length === 0 ? (
           <div className="p-6 text-sm text-[color:var(--muted)]">
-            No Workers AI usage recorded yet.
+            No Google Translate usage recorded yet.
           </div>
         ) : (
           <table className="w-full text-sm">

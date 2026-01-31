@@ -40,6 +40,12 @@ export async function POST(request: Request): Promise<Response> {
       .run();
     await db
       .prepare(
+        "DELETE FROM user_quiz_stats WHERE content_id = ?1 AND episode_id = ?2 AND term = ?3",
+      )
+      .bind(contentId, episodeId, term)
+      .run();
+    await db
+      .prepare(
         "DELETE FROM vocab_occurrences WHERE content_id = ?1 AND episode_id = ?2 AND term = ?3",
       )
       .bind(contentId, episodeId, term)

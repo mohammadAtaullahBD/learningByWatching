@@ -42,7 +42,7 @@
 	//   "consumers": [{ "queue": "vocab-subtitles-queue" }]
 	// },
 	"vars": {
-		"//": "Workers AI daily limit (estimated by characters). Set to align with your plan.",
-		"WORKERS_AI_DAILY_CHAR_LIMIT": "10000"
+		"//": "Google Translate daily limit (estimated by characters). Set to align with your plan.",
+		"GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT": "10000"
 	}
 }

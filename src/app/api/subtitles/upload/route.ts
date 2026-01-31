@@ -33,8 +33,6 @@ type SubtitleEnv = CloudflareEnv & {
   SUBTITLE_BUCKET: R2Bucket;
   SUBTITLE_QUEUE?: Queue<SubtitleUploadJob>;
   VOCAB_DB?: D1Database;
-  CLOUDFLARE_ACCOUNT_ID?: string;
-  CLOUDFLARE_API_TOKEN?: string;
 };
 
 export async function POST(request: Request): Promise<Response> {

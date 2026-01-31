@@ -60,7 +60,7 @@ export default async function AdminSubtitlesPage() {
           <div>
             <h2 className="text-xl font-semibold">Upload new subtitle</h2>
             <p className="text-sm text-[color:var(--muted)]">
-              Supports `.vtt`, `.srt`, and `.txt` files. Processing starts immediately.
+              Supports `.vtt`, `.srt`, and `.txt` files. Parsing starts immediately; meanings are generated on demand.
             </p>
           </div>
         </div>
