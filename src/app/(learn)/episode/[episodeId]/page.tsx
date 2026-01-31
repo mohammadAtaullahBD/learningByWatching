@@ -2,7 +2,6 @@
 import { getD1Database } from "@/lib/d1";
 
 export const dynamic = "force-dynamic";
-export const runtime = "edge";
 
 type VocabRow = {
   word: string;

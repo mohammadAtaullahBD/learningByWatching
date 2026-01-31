@@ -6,7 +6,6 @@ import {
   generateToken,
 } from "@/lib/auth";
 
-export const runtime = "edge";
 
 type RegisterPayload = {
   username?: string;

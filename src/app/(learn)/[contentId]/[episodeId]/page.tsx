@@ -3,7 +3,6 @@ import { getD1Database } from "@/lib/d1";
 import { getSessionUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
-export const runtime = "edge";
 
 const USER_ID = "default";
 const STATUS_OPTIONS = ["new", "learned", "weak"] as const;

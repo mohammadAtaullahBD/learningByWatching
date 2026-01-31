@@ -2,7 +2,6 @@
 import "./globals.css";
 import Navbar from "../components/Navbar";
 
-export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

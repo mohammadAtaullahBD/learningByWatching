@@ -3,7 +3,6 @@ import Link from "next/link";
 import { getD1Database } from "@/lib/d1";
 
 export const dynamic = "force-dynamic";
-export const runtime = "edge";
 
 type EpisodeRow = {
   episode_id: string;

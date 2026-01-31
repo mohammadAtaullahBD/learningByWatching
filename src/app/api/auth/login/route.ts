@@ -6,7 +6,6 @@ import {
   setSessionCookie,
 } from "@/lib/auth";
 
-export const runtime = "edge";
 
 type LoginPayload = {
   username?: string;

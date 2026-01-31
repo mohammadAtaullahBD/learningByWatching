@@ -1,7 +1,6 @@
 import Link from "next/link";
 import AuthForm from "@/components/AuthForm";
 
-export const runtime = "edge";
 
 export default function LoginPage() {
   return (

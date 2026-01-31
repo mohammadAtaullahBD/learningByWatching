@@ -3,7 +3,6 @@ import { getSessionUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
-export const runtime = "edge";
 
 type JobRow = {
   content_id: string;

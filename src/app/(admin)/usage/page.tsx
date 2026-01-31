@@ -3,7 +3,6 @@ import { getSessionUser } from "@/lib/auth";
 import { getD1Database } from "@/lib/d1";
 import { redirect } from "next/navigation";
 
-export const runtime = "edge";
 export const dynamic = "force-dynamic";
 
 type UsageRow = {

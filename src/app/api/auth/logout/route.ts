@@ -1,7 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { clearSessionCookie, getSessionToken } from "@/lib/auth";
 
-export const runtime = "edge";
 
 type EnvWithDb = CloudflareEnv & { VOCAB_DB?: D1Database };
 

@@ -1,7 +1,6 @@
 import { getSessionUser } from "@/lib/auth";
 import { redirect } from "next/navigation";
 
-export const runtime = "edge";
 
 export default async function AdminSubtitlesPage() {
   const user = await getSessionUser();

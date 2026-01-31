@@ -1,7 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getSessionUser } from "@/lib/auth";
 
-export const runtime = "edge";
 
 const allowedStatuses = new Set(["new", "learned", "weak"]);
 
