@@ -16,6 +16,9 @@ type MeaningStats = {
   estimatedCostUsd: number;
   processedCount?: number;
   skippedCount?: number;
+  failedCount?: number;
+  remainingCount?: number;
+  completed?: boolean;
 };
 
 export default function SubtitlePackActions({ contentId, episodeId }: Props) {
@@ -80,19 +83,43 @@ export default function SubtitlePackActions({ contentId, episodeId }: Props) {
     setProcessing(true);
     setError(null);
     try {
-      const response = await fetch("/api/admin/meanings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contentId, episodeId, action: "process" }),
-      });
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as
-          | { error?: string }
-          | null;
-        throw new Error(payload?.error ?? "Failed to process meanings.");
+      let safety = 0;
+      let lastPayload: MeaningStats | null = null;
+
+      while (safety < 20) {
+        const response = await fetch("/api/admin/meanings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contentId, episodeId, action: "process" }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(payload?.error ?? "Failed to process meanings.");
+        }
+        const payload = (await response.json()) as MeaningStats;
+        lastPayload = payload;
+        setStats(payload);
+
+        const remaining = payload.remainingCount ?? 0;
+        const processed = payload.processedCount ?? 0;
+        if (remaining > 0 && processed > 0) {
+          safety += 1;
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          continue;
+        }
+
+        if (remaining > 0 && processed === 0) {
+          setError("No progress made. Daily limit or API errors may have stopped processing.");
+        }
+        break;
       }
-      const payload = (await response.json()) as MeaningStats;
-      setStats(payload);
+
+      if (!lastPayload) {
+        throw new Error("Failed to process meanings.");
+      }
+
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to process meanings.");
@@ -138,6 +165,12 @@ export default function SubtitlePackActions({ contentId, episodeId }: Props) {
             <div>
               Processed: {stats.processedCount} · Skipped: {stats.skippedCount ?? 0}
             </div>
+          )}
+          {typeof stats.failedCount === "number" && (
+            <div>Failed: {stats.failedCount}</div>
+          )}
+          {typeof stats.remainingCount === "number" && (
+            <div>Remaining: {stats.remainingCount}</div>
           )}
         </div>
       )}

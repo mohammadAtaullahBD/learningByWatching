@@ -3,6 +3,8 @@ import { getSessionUser } from "@/lib/auth";
 import { getMeaningAndPersist, type GoogleTranslateEnv } from "@/domain/vocabulary/meaning";
 
 const DEFAULT_COST_PER_MILLION = 20;
+const MAX_PROCESS_PER_REQUEST = 120;
+const MAX_PROCESS_DURATION_MS = 15_000;
 
 type MeaningsPayload = {
   contentId?: string;
@@ -118,10 +120,19 @@ export async function POST(request: Request): Promise<Response> {
     );
   }
 
+  const startedAt = Date.now();
   let processedCount = 0;
   let skippedCount = 0;
+  let failedCount = 0;
 
   for (const row of candidates) {
+    if (
+      processedCount >= MAX_PROCESS_PER_REQUEST ||
+      Date.now() - startedAt > MAX_PROCESS_DURATION_MS
+    ) {
+      break;
+    }
+
     const hasMeaning = isFilled(row.cached) || isFilled(row.vocab);
     if (hasMeaning) {
       skippedCount += 1;
@@ -152,13 +163,19 @@ export async function POST(request: Request): Promise<Response> {
       processedCount += 1;
     } catch (error) {
       // Skip failures but keep processing others.
+      failedCount += 1;
     }
   }
+
+  const remainingCount = Math.max(0, stats.missingCount - processedCount);
 
   return Response.json({
     ...stats,
     estimatedCostUsd,
     processedCount,
     skippedCount,
+    failedCount,
+    remainingCount,
+    completed: remainingCount === 0,
   });
 }

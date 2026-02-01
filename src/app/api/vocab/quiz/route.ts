@@ -1,7 +1,6 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getSessionUser } from "@/lib/auth";
 
-const MAX_QUESTIONS = 30;
 const DEFAULT_QUESTIONS = 8;
 
 const isCorruptedMeaning = (value: string | null, flag: number): boolean =>
@@ -80,7 +79,6 @@ export async function POST(request: Request): Promise<Response> {
 
   const requested = Number(payload.count ?? DEFAULT_QUESTIONS);
   const safeCount = Number.isFinite(requested) ? requested : DEFAULT_QUESTIONS;
-  const count = Math.max(1, Math.min(MAX_QUESTIONS, safeCount));
 
   const { env } = await getCloudflareContext({ async: true });
   const db = (env as EnvWithDb).VOCAB_DB;
@@ -161,10 +159,13 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ questions: [], totalAvailable });
   }
 
+  const requestedCount =
+    safeCount <= 0 ? totalAvailable : Math.min(Math.max(1, safeCount), totalAvailable);
+
   const picked = weightedSample(
     candidates,
     candidates.map((item) => item.weight),
-    Math.min(count, totalAvailable),
+    requestedCount,
   );
 
   const meaningPool = Array.from(

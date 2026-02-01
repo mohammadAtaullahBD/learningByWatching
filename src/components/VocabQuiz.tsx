@@ -80,7 +80,7 @@ export default function VocabQuiz({ contentId, episodeId, disabled = false }: Pr
         body: JSON.stringify({
           contentId,
           episodeId,
-          count: clampCount(questionCount, 1, 30),
+          count: questionCount,
         }),
       });
 
@@ -196,12 +196,12 @@ export default function VocabQuiz({ contentId, episodeId, disabled = false }: Pr
         <input
           id="questionCount"
           type="number"
-          min={1}
-          max={30}
+          min={0}
+          max={totalAvailable > 0 ? totalAvailable : 9999}
           value={questionCount}
           onChange={(event) => {
             const next = Number(event.target.value);
-            setQuestionCount(Number.isFinite(next) ? next : 1);
+            setQuestionCount(Number.isFinite(next) ? next : 0);
           }}
           disabled={disabled || isLoading}
           className="w-20 rounded-xl border border-black/10 bg-white px-3 py-2 text-sm"
