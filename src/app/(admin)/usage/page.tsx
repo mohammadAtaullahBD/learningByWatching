@@ -15,13 +15,9 @@ type UsageRow = {
 const getLimit = async (): Promise<number> => {
   const { env } = await getCloudflareContext({ async: true });
   const envVars = env as CloudflareEnv & {
-    GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT?: string;
     GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT?: string;
   };
-  const limitRaw =
-    envVars.GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT ??
-    envVars.GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT ??
-    "500000";
+  const limitRaw = envVars.GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT ?? "500000";
   const limit = Number(limitRaw ?? "500000");
   return Number.isFinite(limit) && limit > 0 ? limit : 500000;
 };

@@ -187,11 +187,7 @@ const fetchMeaning = async (
 	env: GoogleTranslateEnv,
 	db: D1Database,
 ): Promise<{ meaning: string; isCorrupt: boolean }> => {
-	const limit = Number(
-		env.GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT ??
-			env.GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT ??
-			"500000",
-	);
+	const limit = Number(env.GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT ?? "500000");
 	const estimatedChars = surfaceTerm.length;
 	await ensureWithinLimit(db, "google-translate", estimatedChars, limit);
 	return fetchMeaningWithRetry(surfaceTerm, lemma, pos, sentence, env);
