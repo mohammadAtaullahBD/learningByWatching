@@ -1,6 +1,7 @@
 import AdminVocabEditor from "@/components/AdminVocabEditor";
 import ReportWordButton from "@/components/ReportWordButton";
 import SpeakButton from "@/components/SpeakButton";
+import PosFilterSelect from "@/components/PosFilterSelect";
 import VocabQuiz from "@/components/VocabQuiz";
 import VocabStatusBadge from "@/components/VocabStatusBadge";
 import { getD1Database } from "@/lib/d1";
@@ -186,9 +187,6 @@ export default async function EpisodeVocabPage({
     ? (statusParam as VocabStatus)
     : "all";
   const posFilter = posParam ?? "all";
-  const posOptions = Array.from(
-    new Set(vocab.map((entry) => entry.part_of_speech ?? "unknown")),
-  ).sort((a, b) => a.localeCompare(b));
   const filteredVocab = vocab.filter((entry) => {
     if (statusFilter !== "all" && entry.status !== statusFilter) return false;
     if (posFilter !== "all" && (entry.part_of_speech ?? "unknown") !== posFilter) return false;
@@ -220,6 +218,13 @@ export default async function EpisodeVocabPage({
       ? `/${contentId}/${episodeId}?${queryString}`
       : `/${contentId}/${episodeId}`;
   };
+  const posOptions = Array.from(
+    new Set(vocab.map((entry) => entry.part_of_speech ?? "unknown")),
+  ).sort((a, b) => a.localeCompare(b));
+  const posHrefMap = Object.fromEntries(
+    posOptions.map((pos) => [pos, buildHref({ pos, page: "1" })]),
+  );
+  const posAllHref = buildHref({ pos: null, page: "1" });
   const pageSteps: Array<number | "gap"> = [];
   for (let i = 1; i <= totalPages; i += 1) {
     const isEdge = i === 1 || i === totalPages;
@@ -329,30 +334,12 @@ export default async function EpisodeVocabPage({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-6 py-3 text-xs">
-          <span className="text-[color:var(--muted)]">POS</span>
-          <Link
-            href={buildHref({ pos: null, page: "1" })}
-            className={`rounded-full border px-3 py-1 ${
-              posFilter === "all"
-                ? "border-black/20 text-[color:var(--text)]"
-                : "border-black/10 text-[color:var(--muted)]"
-            }`}
-          >
-            All POS
-          </Link>
-          {posOptions.map((pos) => (
-            <Link
-              key={pos}
-              href={buildHref({ pos, page: "1" })}
-              className={`rounded-full border px-3 py-1 ${
-                posFilter === pos
-                  ? "border-blue-300 text-blue-700"
-                  : "border-black/10 text-[color:var(--muted)]"
-              }`}
-            >
-              {pos}
-            </Link>
-          ))}
+          <PosFilterSelect
+            value={posFilter}
+            options={posOptions}
+            hrefAll={posAllHref}
+            hrefByPos={posHrefMap}
+          />
         </div>
         {!user && (
           <div className="border-b border-black/5 px-6 py-3 text-xs text-[color:var(--muted)]">
