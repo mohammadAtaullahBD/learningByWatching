@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 
 type Question = {
   id: string;
@@ -31,6 +32,7 @@ const clampCount = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value));
 
 export default function VocabQuiz({ contentId, episodeId, disabled = false }: Props) {
+  const router = useRouter();
   const [questionCount, setQuestionCount] = useState(8);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -69,6 +71,12 @@ export default function VocabQuiz({ contentId, episodeId, disabled = false }: Pr
     setReportError(null);
     setReporting(false);
   }, [currentIndex, quizEnded]);
+
+  useEffect(() => {
+    if (quizEnded) {
+      router.refresh();
+    }
+  }, [quizEnded, router]);
 
   const progressLabel = useMemo(() => {
     if (!totalQuestions) return "";
@@ -171,6 +179,7 @@ export default function VocabQuiz({ contentId, episodeId, disabled = false }: Pr
     setReported(false);
     setReportError(null);
     setReporting(false);
+    router.refresh();
   };
 
   const handleBackToList = () => {

@@ -10,6 +10,7 @@ export type GoogleTranslateEnv = {
 	GOOGLE_TRANSLATE_API_KEY?: string;
 	GOOGLE_TRANSLATE_LOCATION?: string;
 	GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT?: string;
+	GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT?: string;
 };
 
 type MeaningRequest = {
@@ -117,42 +118,54 @@ const fetchMeaningWithRetry = async (
 	return { meaning, isCorrupt: false };
 };
 
-const buildDayKey = (value: Date): string => {
+const buildMonthKey = (value: Date): string => {
 	const year = value.getUTCFullYear();
 	const month = String(value.getUTCMonth() + 1).padStart(2, "0");
-	const day = String(value.getUTCDate()).padStart(2, "0");
-	return `${year}-${month}-${day}`;
+	return `${year}-${month}`;
 };
 
-const getUsageCount = async (
+const getMonthlyUsage = async (
 	db: D1Database,
-	dayKey: string,
+	monthKey: string,
 	provider: string,
 ): Promise<number> => {
-	const row = await db
+	const monthRow = await db
 		.prepare(
 			"SELECT char_count as char_count FROM translation_usage WHERE month_key = ?1 AND provider = ?2",
 		)
-		.bind(dayKey, provider)
+		.bind(monthKey, provider)
 		.first<UsageRow>();
-	return row?.char_count ?? 0;
+	if (monthRow?.char_count !== undefined && monthRow?.char_count !== null) {
+		return monthRow.char_count;
+	}
+
+	const likePattern = `${monthKey}-%`;
+	const sumRow = await db
+		.prepare(
+			"SELECT COALESCE(SUM(char_count), 0) as char_count FROM translation_usage WHERE month_key LIKE ?1 AND provider = ?2",
+		)
+		.bind(likePattern, provider)
+		.first<UsageRow>();
+	return sumRow?.char_count ?? 0;
 };
 
 const incrementUsage = async (
 	db: D1Database,
-	dayKey: string,
+	monthKey: string,
 	provider: string,
 	delta: number,
 ): Promise<void> => {
+	const existing = await getMonthlyUsage(db, monthKey, provider);
+	const nextTotal = existing + delta;
 	await db
 		.prepare(
 			`INSERT INTO translation_usage (month_key, provider, char_count, updated_at)
        VALUES (?1, ?2, ?3, datetime('now'))
        ON CONFLICT(month_key, provider) DO UPDATE SET
-         char_count = translation_usage.char_count + ?3,
+         char_count = ?3,
          updated_at = datetime('now')`,
 		)
-		.bind(dayKey, provider, delta)
+		.bind(monthKey, provider, nextTotal)
 		.run();
 };
 
@@ -162,12 +175,12 @@ const ensureWithinLimit = async (
 	charCount: number,
 	limit: number,
 ): Promise<void> => {
-	const dayKey = buildDayKey(new Date());
-	const used = await getUsageCount(db, dayKey, provider);
+	const monthKey = buildMonthKey(new Date());
+	const used = await getMonthlyUsage(db, monthKey, provider);
 	if (used + charCount > limit) {
-		throw new Error("Daily Google Translate limit reached.");
+		throw new Error("Monthly Google Translate limit reached.");
 	}
-	await incrementUsage(db, dayKey, provider, charCount);
+	await incrementUsage(db, monthKey, provider, charCount);
 };
 
 const fetchMeaning = async (
@@ -178,7 +191,11 @@ const fetchMeaning = async (
 	env: GoogleTranslateEnv,
 	db: D1Database,
 ): Promise<{ meaning: string; isCorrupt: boolean }> => {
-	const limit = Number(env.GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT ?? "10000");
+	const limit = Number(
+		env.GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT ??
+			env.GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT ??
+			"500000",
+	);
 	const estimatedChars = surfaceTerm.length;
 	await ensureWithinLimit(db, "google-translate", estimatedChars, limit);
 	return fetchMeaningWithRetry(surfaceTerm, lemma, pos, sentence, env);

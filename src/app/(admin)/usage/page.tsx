@@ -11,31 +11,46 @@ type UsageRow = {
   month_key: string;
 };
 
-const buildDayKey = (): string => {
+const buildMonthKey = (): string => {
   const now = new Date();
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(now.getUTCDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+  return `${year}-${month}`;
 };
 
 const getLimit = async (): Promise<number> => {
   const { env } = await getCloudflareContext({ async: true });
-  const limitRaw = (env as CloudflareEnv & { GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT?: string })
-    .GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT;
-  const limit = Number(limitRaw ?? "10000");
-  return Number.isFinite(limit) && limit > 0 ? limit : 10000;
+  const envVars = env as CloudflareEnv & {
+    GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT?: string;
+    GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT?: string;
+  };
+  const limitRaw =
+    envVars.GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT ??
+    envVars.GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT ??
+    "500000";
+  const limit = Number(limitRaw ?? "500000");
+  return Number.isFinite(limit) && limit > 0 ? limit : 500000;
 };
 
 const fetchUsage = async (): Promise<UsageRow[]> => {
   const db = await getD1Database();
   if (!db) return [];
-  const dayKey = buildDayKey();
-  const result = await db
+  const monthKey = buildMonthKey();
+  const monthRow = await db
     .prepare(
       "SELECT provider, char_count, month_key FROM translation_usage WHERE month_key = ?1 AND provider = 'google-translate'",
     )
-    .bind(dayKey)
+    .bind(monthKey)
+    .first<UsageRow>();
+  if (monthRow) {
+    return [monthRow];
+  }
+  const likePattern = `${monthKey}-%`;
+  const result = await db
+    .prepare(
+      "SELECT provider, COALESCE(SUM(char_count), 0) as char_count, ?2 as month_key FROM translation_usage WHERE month_key LIKE ?1 AND provider = 'google-translate'",
+    )
+    .bind(likePattern, monthKey)
     .all<UsageRow>();
   return result.results ?? [];
 };
@@ -50,7 +65,7 @@ export default async function UsagePage() {
   }
 
   const [usage, limit] = await Promise.all([fetchUsage(), getLimit()]);
-  const dayKey = buildDayKey();
+  const monthKey = buildMonthKey();
 
   return (
     <main className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-10">
@@ -60,7 +75,7 @@ export default async function UsagePage() {
         </p>
         <h1 className="text-4xl font-semibold">Google Translate Usage</h1>
         <p className="text-sm text-[color:var(--muted)]">
-          Current day: {dayKey} (UTC) · Limit: {limit.toLocaleString()} chars
+          Current month: {monthKey} (UTC) · Limit: {limit.toLocaleString()} chars
         </p>
       </header>
 

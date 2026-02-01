@@ -68,23 +68,25 @@ export default function AdminVocabEditor({
 
   return (
     <div className="flex flex-col gap-2">
-      {reportCount && reportCount > 0 && (
-        <span className="text-[11px] font-semibold text-orange-600">
-          {reportCount} report{reportCount > 1 ? "s" : ""}
-        </span>
-      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {reportCount && reportCount > 0 ? (
+          <span className="rounded-full border border-orange-200 bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+            Reports: {reportCount}
+          </span>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => setOpen((value) => !value)}
+          className="rounded-full border border-black/10 px-3 py-1 text-xs font-semibold text-[color:var(--muted)] transition hover:border-black/20"
+        >
+          {open ? "Close" : "Edit"}
+        </button>
+      </div>
       {suggestedMeaning ? (
         <span className="text-[11px] text-[color:var(--muted)]">
           Suggested: {suggestedMeaning}
         </span>
       ) : null}
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="rounded-full border border-black/10 px-3 py-1 text-xs font-semibold text-[color:var(--muted)] transition hover:border-black/20"
-      >
-        {open ? "Close" : "Edit"}
-      </button>
       {open && (
         <div className="grid gap-2 rounded-2xl border border-black/10 bg-white p-3 text-xs">
           <label className="grid gap-1">
