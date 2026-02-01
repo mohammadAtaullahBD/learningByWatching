@@ -10,6 +10,8 @@ type Props = {
   lemma: string;
   pos: string;
   meaning: string;
+  suggestedMeaning?: string | null;
+  reportCount?: number;
 };
 
 export default function AdminVocabEditor({
@@ -19,6 +21,8 @@ export default function AdminVocabEditor({
   lemma,
   pos,
   meaning,
+  suggestedMeaning,
+  reportCount,
 }: Props) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -26,22 +30,26 @@ export default function AdminVocabEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const runAction = async (action: "update" | "resolve" | "delete") => {
+  const runAction = async (
+    action: "update" | "resolve" | "delete" | "applySuggestion",
+    override?: { lemma?: string; pos?: string; meaning?: string },
+  ) => {
     setSaving(true);
     setError(null);
     try {
+      const payload = {
+        contentId,
+        episodeId,
+        term,
+        lemma: override?.lemma ?? form.lemma,
+        pos: override?.pos ?? form.pos,
+        meaning: override?.meaning ?? form.meaning,
+        action,
+      };
       const response = await fetch("/api/admin/vocab", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contentId,
-          episodeId,
-          term,
-          lemma: form.lemma,
-          pos: form.pos,
-          meaning: form.meaning,
-          action,
-        }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as
@@ -60,6 +68,16 @@ export default function AdminVocabEditor({
 
   return (
     <div className="flex flex-col gap-2">
+      {reportCount && reportCount > 0 && (
+        <span className="text-[11px] font-semibold text-orange-600">
+          {reportCount} report{reportCount > 1 ? "s" : ""}
+        </span>
+      )}
+      {suggestedMeaning ? (
+        <span className="text-[11px] text-[color:var(--muted)]">
+          Suggested: {suggestedMeaning}
+        </span>
+      ) : null}
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -102,6 +120,19 @@ export default function AdminVocabEditor({
             >
               {saving ? "Saving..." : "Save"}
             </button>
+            {suggestedMeaning && (
+              <button
+                type="button"
+                onClick={() => {
+                  setForm((current) => ({ ...current, meaning: suggestedMeaning }));
+                  runAction("applySuggestion", { meaning: suggestedMeaning });
+                }}
+                disabled={saving}
+                className="rounded-full border border-emerald-200 px-3 py-1 text-xs font-semibold text-emerald-700"
+              >
+                Apply suggestion
+              </button>
+            )}
             <button
               type="button"
               onClick={() => runAction("resolve")}

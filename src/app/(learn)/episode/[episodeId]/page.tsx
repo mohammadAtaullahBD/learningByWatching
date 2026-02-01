@@ -1,6 +1,4 @@
-
 import { getD1Database } from "@/lib/d1";
-import ReportWordButton from "@/components/ReportWordButton";
 
 export const dynamic = "force-dynamic";
 
@@ -80,11 +78,6 @@ export default async function EpisodePage({
                 <td className="p-4">
                   <div className="flex items-center gap-1">
                     <span className="font-semibold">{w.word}</span>
-                    <ReportWordButton
-                      contentId={contentId}
-                      episodeId={episodeId}
-                      term={w.word}
-                    />
                   </div>
                   <div className="text-xs text-[color:var(--muted)]">
                     lemma: {w.lemma ?? "—"}
@@ -96,11 +89,6 @@ export default async function EpisodePage({
                 <td className="p-4">
                   <div className="flex items-center gap-1">
                     <span>{w.meaning ?? "—"}</span>
-                    <ReportWordButton
-                      contentId={contentId}
-                      episodeId={episodeId}
-                      term={w.word}
-                    />
                   </div>
                 </td>
                 <td className="p-4 italic text-[color:var(--muted)]">

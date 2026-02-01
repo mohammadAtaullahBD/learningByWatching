@@ -42,6 +42,10 @@ export default function VocabQuiz({ contentId, episodeId, disabled = false }: Pr
   const [score, setScore] = useState({ correct: 0, wrong: 0 });
   const [totalAvailable, setTotalAvailable] = useState(0);
   const [quizEnded, setQuizEnded] = useState(false);
+  const [reportText, setReportText] = useState("");
+  const [reporting, setReporting] = useState(false);
+  const [reported, setReported] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
 
   const current = questions[currentIndex];
   const totalQuestions = questions.length;
@@ -58,6 +62,13 @@ export default function VocabQuiz({ contentId, episodeId, disabled = false }: Pr
       delete root.dataset.quizActive;
     };
   }, [quizActive]);
+
+  useEffect(() => {
+    setReportText("");
+    setReported(false);
+    setReportError(null);
+    setReporting(false);
+  }, [currentIndex, quizEnded]);
 
   const progressLabel = useMemo(() => {
     if (!totalQuestions) return "";
@@ -156,6 +167,10 @@ export default function VocabQuiz({ contentId, episodeId, disabled = false }: Pr
     setError(null);
     setScore({ correct: 0, wrong: 0 });
     setQuizEnded(false);
+    setReportText("");
+    setReported(false);
+    setReportError(null);
+    setReporting(false);
   };
 
   const handleBackToList = () => {
@@ -163,6 +178,39 @@ export default function VocabQuiz({ contentId, episodeId, disabled = false }: Pr
     const list = document.getElementById("word-list");
     if (list) {
       list.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const submitReport = async () => {
+    if (!current || !feedback || reporting || reported) return;
+    if (!reportText.trim()) {
+      setReportError("Please suggest the correct meaning.");
+      return;
+    }
+    setReporting(true);
+    setReportError(null);
+    try {
+      const response = await fetch("/api/vocab/report", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contentId,
+          episodeId,
+          term: current.term,
+          observedMeaning: feedback.correctMeaning,
+          suggestedMeaning: reportText.trim(),
+          source: "quiz",
+        }),
+      });
+      if (!response.ok) {
+        throw new Error("Report failed");
+      }
+      setReported(true);
+    } catch (err) {
+      console.error(err);
+      setReportError("Failed to submit report. Please try again.");
+    } finally {
+      setReporting(false);
     }
   };
 
@@ -315,6 +363,27 @@ export default function VocabQuiz({ contentId, episodeId, disabled = false }: Pr
                   Finish
                 </button>
               )}
+            </div>
+          )}
+          {feedback && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-[color:var(--muted)]">
+              <span>Report wrong meaning</span>
+              <input
+                value={reportText}
+                onChange={(event) => setReportText(event.target.value)}
+                disabled={reported || reporting}
+                placeholder="Suggest correct meaning"
+                className="w-44 rounded-full border border-black/10 bg-white px-3 py-1"
+              />
+              <button
+                type="button"
+                onClick={submitReport}
+                disabled={reported || reporting}
+                className="rounded-full border border-black/10 px-3 py-1 text-[10px] uppercase tracking-wide text-[color:var(--muted)] transition hover:border-black/20 disabled:opacity-60"
+              >
+                {reported ? "reported" : reporting ? "sending..." : "report"}
+              </button>
+              {reportError && <span className="text-rose-600">{reportError}</span>}
             </div>
           )}
         </div>

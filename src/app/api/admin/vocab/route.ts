@@ -8,7 +8,7 @@ type VocabPayload = {
   lemma?: string;
   pos?: string;
   meaning?: string;
-  action?: "update" | "resolve" | "delete";
+  action?: "update" | "resolve" | "delete" | "applySuggestion";
 };
 
 type EnvWithDb = CloudflareEnv & { VOCAB_DB?: D1Database };
@@ -62,6 +62,14 @@ export async function POST(request: Request): Promise<Response> {
       )
       .bind(term)
       .run();
+    await db
+      .prepare(
+        `UPDATE vocab_reports
+         SET resolved_at = datetime('now')
+         WHERE content_id = ?1 AND episode_id = ?2 AND term = ?3 AND resolved_at IS NULL`,
+      )
+      .bind(contentId, episodeId, term)
+      .run();
 
     return Response.json({ ok: true });
   }
@@ -84,11 +92,47 @@ export async function POST(request: Request): Promise<Response> {
       )
       .bind(term, pos)
       .run();
+    await db
+      .prepare(
+        `UPDATE vocab_reports
+         SET resolved_at = datetime('now')
+         WHERE content_id = ?1 AND episode_id = ?2 AND term = ?3 AND resolved_at IS NULL`,
+      )
+      .bind(contentId, episodeId, term)
+      .run();
     return Response.json({ ok: true });
   }
 
   if (!lemma || !pos || !meaning) {
     return Response.json({ error: "Missing fields" }, { status: 400 });
+  }
+
+  if (action === "applySuggestion") {
+    await db
+      .prepare(
+        `UPDATE vocab_occurrences
+         SET lemma = ?1, pos = ?2, meaning_bn_override = ?3, is_corrupt_override = 0
+         WHERE content_id = ?4 AND episode_id = ?5 AND term = ?6`,
+      )
+      .bind(lemma, pos, meaning, contentId, episodeId, term)
+      .run();
+    await db
+      .prepare(
+        `UPDATE vocabulary
+         SET lemma = ?1, pos = ?2, meaning_bn = ?3, is_corrupt = 0, updated_at = datetime('now')
+         WHERE surface_term = ?4`,
+      )
+      .bind(lemma, pos, meaning, term)
+      .run();
+    await db
+      .prepare(
+        `UPDATE vocab_reports
+         SET resolved_at = datetime('now')
+         WHERE content_id = ?1 AND episode_id = ?2 AND term = ?3 AND resolved_at IS NULL`,
+      )
+      .bind(contentId, episodeId, term)
+      .run();
+    return Response.json({ ok: true });
   }
 
   await db
@@ -106,6 +150,14 @@ export async function POST(request: Request): Promise<Response> {
        WHERE surface_term = ?4`,
     )
     .bind(lemma, pos, meaning, term)
+    .run();
+  await db
+    .prepare(
+      `UPDATE vocab_reports
+       SET resolved_at = datetime('now')
+       WHERE content_id = ?1 AND episode_id = ?2 AND term = ?3 AND resolved_at IS NULL`,
+    )
+    .bind(contentId, episodeId, term)
     .run();
 
   return Response.json({ ok: true });

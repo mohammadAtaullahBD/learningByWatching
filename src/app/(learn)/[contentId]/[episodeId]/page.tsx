@@ -1,5 +1,4 @@
 import AdminVocabEditor from "@/components/AdminVocabEditor";
-import ReportWordButton from "@/components/ReportWordButton";
 import VocabQuiz from "@/components/VocabQuiz";
 import VocabStatusBadge from "@/components/VocabStatusBadge";
 import { getD1Database } from "@/lib/d1";
@@ -19,6 +18,8 @@ type VocabRow = {
   example: string | null;
   status: VocabStatus;
   is_corrupt: number;
+  report_count: number | null;
+  suggested_meaning: string | null;
 };
 
 type QuizStatsRow = {
@@ -49,6 +50,8 @@ async function fetchVocab(
         COALESCE(MAX(o.meaning_bn_override), v.meaning_bn) as meaning,
         COALESCE(MAX(o.is_corrupt_override), v.is_corrupt, 0) as is_corrupt,
         MIN(o.sentence) as example,
+        COALESCE(MAX(vr.report_count), 0) as report_count,
+        MAX(vrl.suggested_meaning) as suggested_meaning,
         CASE
           WHEN MAX(CASE WHEN ws.status = 'weak' THEN 1 ELSE 0 END) = 1 THEN 'weak'
           WHEN MAX(CASE WHEN ls.status = 'learned' OR ws.status = 'learned' THEN 1 ELSE 0 END) = 1 THEN 'learned'
@@ -56,12 +59,19 @@ async function fetchVocab(
         END as status
       FROM vocab_occurrences o
       LEFT JOIN vocabulary v ON v.surface_term = o.term
+      LEFT JOIN (
+        SELECT content_id, episode_id, term, MAX(id) as latest_id, COUNT(*) as report_count
+        FROM vocab_reports
+        WHERE resolved_at IS NULL
+        GROUP BY content_id, episode_id, term
+      ) vr ON vr.content_id = o.content_id AND vr.episode_id = o.episode_id AND vr.term = o.term
+      LEFT JOIN vocab_reports vrl ON vrl.id = vr.latest_id
       LEFT JOIN word_status ws
         ON ws.user_id = ? AND ws.content_id = o.content_id AND ws.episode_id = o.episode_id AND ws.term = o.term
       LEFT JOIN user_lemma_status ls
         ON ls.user_id = ? AND ls.lemma = COALESCE(o.lemma, v.lemma, o.term)
       WHERE o.content_id = ? AND o.episode_id = ?
-      GROUP BY o.term, v.meaning_bn, v.pos, v.lemma, v.is_corrupt
+      GROUP BY o.term, v.meaning_bn, v.pos, v.lemma, v.is_corrupt, vr.report_count, vrl.suggested_meaning
       ORDER BY COALESCE(MAX(o.lemma), v.lemma, o.term) ASC, o.term ASC`
     )
     .bind(userId, userId, contentId, episodeId)
@@ -108,6 +118,8 @@ export default async function EpisodeVocabPage({
   const { contentId, episodeId } = await params;
   const { filter } = (await searchParams) ?? {};
   const filterCorrupt = filter === "corrupt";
+  const filterReported = filter === "reported";
+  const filterNone = !filterCorrupt && !filterReported;
   const [vocabRaw, quizStats] = await Promise.all([
     fetchVocab(contentId, episodeId, userId),
     user ? fetchQuizStats(contentId, episodeId, userId) : Promise.resolve({ attempts: 0, correct: 0, wrong: 0 }),
@@ -115,6 +127,7 @@ export default async function EpisodeVocabPage({
   const vocab = vocabRaw.filter((entry) => {
     const corrupted = isCorruptedMeaning(entry.meaning, entry.is_corrupt);
     if (isAdmin && filterCorrupt) return corrupted;
+    if (isAdmin && filterReported) return (entry.report_count ?? 0) > 0;
     if (isAdmin) return true;
     return !corrupted;
   });
@@ -142,7 +155,7 @@ export default async function EpisodeVocabPage({
           <Link
             href={`/${contentId}/${episodeId}`}
             className={`rounded-full border px-3 py-1 ${
-              !filterCorrupt ? "border-black/20 text-[color:var(--text)]" : "border-black/10 text-[color:var(--muted)]"
+              filterNone ? "border-black/20 text-[color:var(--text)]" : "border-black/10 text-[color:var(--muted)]"
             }`}
           >
             All
@@ -154,6 +167,14 @@ export default async function EpisodeVocabPage({
             }`}
           >
             Corrupt only
+          </Link>
+          <Link
+            href={`/${contentId}/${episodeId}?filter=reported`}
+            className={`rounded-full border px-3 py-1 ${
+              filterReported ? "border-emerald-300 text-emerald-700" : "border-black/10 text-[color:var(--muted)]"
+            }`}
+          >
+            Reported only
           </Link>
         </div>
       )}
@@ -228,11 +249,6 @@ export default async function EpisodeVocabPage({
                   <td className="p-4">
                     <div className="flex items-center gap-1">
                       <span>{entry.meaning ?? "—"}</span>
-                      <ReportWordButton
-                        contentId={contentId}
-                        episodeId={episodeId}
-                        term={entry.word}
-                      />
                     </div>
                   </td>
                   <td className="p-4 italic text-[color:var(--muted)]">
@@ -250,6 +266,8 @@ export default async function EpisodeVocabPage({
                         lemma={entry.lemma ?? entry.word}
                         pos={entry.part_of_speech ?? "unknown"}
                         meaning={entry.meaning ?? ""}
+                        suggestedMeaning={entry.suggested_meaning}
+                        reportCount={entry.report_count ?? 0}
                       />
                     </td>
                   )}
