@@ -134,7 +134,37 @@ export default async function EpisodeVocabPage({
     fetchVocab(contentId, episodeId, userId),
     user ? fetchQuizStats(contentId, episodeId, userId) : Promise.resolve({ attempts: 0, correct: 0, wrong: 0 }),
   ]);
-  const vocab = vocabRaw.filter((entry) => {
+  const dedupedRaw = Array.from(
+    vocabRaw.reduce((map, entry) => {
+      const key = `${entry.word}::${entry.part_of_speech ?? "unknown"}`;
+      const existing = map.get(key);
+      if (!existing) {
+        map.set(key, entry);
+        return map;
+      }
+
+      const merged = {
+        ...existing,
+        lemma: existing.lemma ?? entry.lemma,
+        part_of_speech: existing.part_of_speech ?? entry.part_of_speech,
+        meaning: existing.meaning ?? entry.meaning,
+        example: existing.example ?? entry.example,
+        report_count: Math.max(existing.report_count ?? 0, entry.report_count ?? 0),
+        suggested_meaning: existing.suggested_meaning ?? entry.suggested_meaning,
+        status:
+          existing.status === "weak" || entry.status === "weak"
+            ? "weak"
+            : existing.status === "learned" || entry.status === "learned"
+              ? "learned"
+              : "new",
+      };
+
+      map.set(key, merged);
+      return map;
+    }, new Map<string, VocabRow>()),
+  ).map((entry) => entry[1]);
+
+  const vocab = dedupedRaw.filter((entry) => {
     const corrupted = isCorruptedMeaning(entry.meaning, entry.is_corrupt);
     if (isAdmin && filterCorrupt) return corrupted;
     if (isAdmin && filterReported) return (entry.report_count ?? 0) > 0;
@@ -351,7 +381,10 @@ export default async function EpisodeVocabPage({
               </thead>
               <tbody>
                 {pageVocab.map((entry) => (
-                  <tr key={entry.word} className="border-b border-black/5 align-top">
+                  <tr
+                    key={`${entry.word}-${entry.part_of_speech ?? "unknown"}`}
+                    className="border-b border-black/5 align-top"
+                  >
                     <td className="p-4">
                       <div className="flex items-center gap-1">
                         <span className="font-semibold">{entry.word}</span>

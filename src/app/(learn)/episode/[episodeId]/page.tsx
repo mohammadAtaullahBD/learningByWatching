@@ -46,7 +46,16 @@ export default async function EpisodePage({
   params: Promise<{ episodeId: string }>;
 }) {
   const { episodeId } = await params;
-  const words = (await fetchEpisodeVocab(episodeId)).filter(
+  const deduped = Array.from(
+    (await fetchEpisodeVocab(episodeId)).reduce((map, entry) => {
+      const key = `${entry.word}::${entry.part_of_speech ?? "unknown"}`;
+      if (!map.has(key)) {
+        map.set(key, entry);
+      }
+      return map;
+    }, new Map<string, VocabRow>()),
+  ).map((entry) => entry[1]);
+  const words = deduped.filter(
     (entry) => !isCorruptedMeaning(entry.meaning, entry.is_corrupt),
   );
   const contentId = words[0]?.content_id ?? "unknown";
@@ -73,7 +82,10 @@ export default async function EpisodePage({
           </thead>
           <tbody>
             {words.map((w) => (
-              <tr key={w.word} className="border-b border-black/5">
+              <tr
+                key={`${w.word}-${w.part_of_speech ?? "unknown"}`}
+                className="border-b border-black/5"
+              >
                 <td className="p-4">
                   <div className="flex items-center gap-1">
                     <span className="font-semibold">{w.word}</span>
