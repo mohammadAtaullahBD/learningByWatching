@@ -9,7 +9,7 @@ Core flow: upload subtitle -> parse -> store vocab -> learn -> track progress.
 MY PLAN (NEXT IMPLEMENTATIONS)
 1) Quality controls
    - Add a reprocess/retranslate tool per episode/pack to refresh meanings.
-   - Add better meaning QA (optional validation model or secondary source) and admin review workflow.
+   - Add better meaning QA (optional validation model or secondary source) and deeper admin review workflow.
 
 2) Admin tools
    - Improve subtitle library: search, filters, pagination.
@@ -37,8 +37,8 @@ WHAT IS IMPLEMENTED (HISTORY OF IMPLEMENTATION)
    - /[contentId]/[episodeId]: shows vocab list with meanings + computed status badges.
    - /episode/[episodeId]: legacy episode vocab view.
    - Word rows show surface form + lemma.
-   - “Report” button beside Bangla meaning marks a word as corrupted.
    - Word list sorted by lemma.
+   - Report flow is moved to quiz: users can report after answering with a suggested correction.
 
 3) Authentication + Roles
    - Username/password auth (no email).
@@ -55,8 +55,8 @@ WHAT IS IMPLEMENTED (HISTORY OF IMPLEMENTATION)
 5) Translation (Bangla meaning)
    - Google Translate API v2 (API key).
    - Meanings cached in translation_cache + vocabulary.
-   - Daily usage tracking in D1 (translation_usage).
-   - Limit controlled by GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT (default 10000).
+   - Monthly usage tracking in D1 (translation_usage).
+   - Limit controlled by GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT (default 500,000).
    - Meanings are generated on-demand via admin action (not during upload).
    - Admin stats show total terms, known/missing meanings, estimated chars and cost.
 
@@ -65,13 +65,15 @@ WHAT IS IMPLEMENTED (HISTORY OF IMPLEMENTATION)
    - /subtitles shows meaning stats per pack and manual “Process meanings” button.
    - Admin can edit lemma/pos/meaning per word.
    - Admin can mark word OK or delete word.
-   - /usage shows current day Google Translate usage + limit (UTC).
+   - Admin can filter reported words and apply user suggestions.
+   - /usage shows current month Google Translate usage + limit (UTC).
 
 7) Data Model Extensions
    - Store surface term + lemma per occurrence.
    - Support meaning overrides per occurrence.
    - Track corruption flags for vocab and overrides.
    - Track quiz stats per user/episode/term.
+   - Track user reports + suggested corrections (vocab_reports).
 
 DEPLOYMENT & CONFIG
 - Build command for CI: npm run build
@@ -93,6 +95,7 @@ MIGRATIONS
 - 0008_corruption_flags.sql (corrupt flags)
 - 0009_quiz_and_lemma_status.sql (lemma status + quiz stats)
 - 0010_google_translate_provider.sql (usage provider merge)
+- 0011_vocab_reports.sql (quiz report storage)
 
 RUNNING LOCAL
 - npm run migrate:local
@@ -102,12 +105,14 @@ LOCAL ENV (.dev.vars)
 NEXTJS_ENV=development
 GOOGLE_TRANSLATE_API_KEY=...
 GOOGLE_TRANSLATE_PROJECT_ID=...
-GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT=10000
+GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT=500000
 GOOGLE_TRANSLATE_COST_PER_MILLION=20
 
 NOTES
 - Meanings are generated on demand; use the admin “Process meanings” action per pack.
-- Reported words are hidden from normal users; admins review via filter.
+- Meanings are processed in batches so big packs require multiple passes (handled automatically).
+- Reported words are hidden from normal users; admins review via "Reported only" filter.
+- Quiz supports any question count; 0 means "use all available".
 - MCQ practice sets learned on correct answer and weak on wrong answer.
 - Dark mode supported with user toggle + system preference.
 

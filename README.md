@@ -77,7 +77,6 @@ Required
 Optional
 - `GOOGLE_TRANSLATE_PROJECT_ID` (kept for reference)
 - `GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT` (default 500,000)
-- `GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT` (legacy fallback, optional)
 
 ## Database (D1)
 Key tables:
