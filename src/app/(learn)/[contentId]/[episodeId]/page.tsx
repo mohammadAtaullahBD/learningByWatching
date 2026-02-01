@@ -3,6 +3,7 @@ import VocabQuiz from "@/components/VocabQuiz";
 import VocabStatusBadge from "@/components/VocabStatusBadge";
 import { getD1Database } from "@/lib/d1";
 import { getSessionUser } from "@/lib/auth";
+import { isCorruptedMeaning } from "@/lib/vocab-utils";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -28,8 +29,6 @@ type QuizStatsRow = {
   wrong: number;
 };
 
-const isCorruptedMeaning = (value: string | null, flag: number): boolean =>
-  flag === 1 || Boolean(value && value.includes("\uFFFD"));
 
 async function fetchVocab(
   contentId: string,

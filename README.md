@@ -1,71 +1,129 @@
-# ReelVocab (Cloudflare + OpenNext)
+# ReelVocab
 
-Vocabulary-first learning from film/series subtitles. Runs on Cloudflare (D1, R2, Queues, Google Translate API) via OpenNext.
+Vocabulary-first learning from film/series subtitles. Admins upload subtitles, the system extracts terms, generates Bangla meanings, and learners practice with MCQ quizzes. Built on Cloudflare (D1/R2/Queues) with Next.js + OpenNext.
+
+## Goals
+- Build a subtitle-to-vocabulary pipeline for language learners.
+- Keep meanings accurate, with admin review and user reporting.
+- Track learning progress (new/learned/weak) and enable quiz practice.
 
 ## Stack
-- Next.js App Router (edge runtime where data is used)
-- OpenNext Cloudflare adapter
-- Cloudflare D1 (vocab + progress), R2 (subtitle files), Queues (async parsing), Google Translate API (Bangla meanings)
+- Next.js App Router (OpenNext Cloudflare adapter)
+- Cloudflare D1 (data), R2 (subtitle storage), Queues (background processing)
 - Tailwind CSS v4
-- wink-nlp for tokenization/POS tagging (Workers compatible)
+- wink-nlp for tokenization/POS
+- Google Translate API (Bangla meanings) with monthly usage tracking
 
-## Quick start (local worker-style dev)
-1) Install deps: `npm install`
-2) Create Cloudflare resources (names below are referenced in `wrangler.jsonc`):
-   - D1: `wrangler d1 create vocab-db` → copy `database_id` into `wrangler.jsonc`
-   - R2: `wrangler r2 create vocab-subtitles`
-   - Queue: `wrangler queues create vocab-subtitles-queue`
-3) Bind them in `wrangler.jsonc` (already templated; just replace `REPLACE_WITH_DB_ID` if needed).
-4) Generate env types (optional): `npm run cf-typegen`
-5) Run migrations + seed locally: `npm run migrate:local`
-6) Run with Cloudflare runtime bindings: `npm run dev:cf`
-   - Alternatively, `npm run preview` to build then serve through the worker.
+## Core Flow
+1) Admin uploads subtitle file on `/subtitles`
+2) File saved to R2 and queued
+3) Worker queue parses subtitle into:
+   - `subtitle_files`, `vocab_terms`, `vocab_occurrences`
+4) Admin runs “Process meanings” to fetch Bangla meanings and store:
+   - `translation_cache` (cache)
+   - `vocabulary` (surface + lemma + POS + meaning)
+5) Learners open episode page:
+   - See words, meanings, examples
+   - MCQ quiz updates learned/weak status
+6) Quiz users can report wrong meanings with a suggested correction
+7) Admin reviews reported words and applies suggestions or edits manually
 
-For plain Next dev (no bindings), `npm run dev` works but API upload will 500 because R2/Queue/D1 aren’t bound.
+## Features
+- Surface form + lemma per term
+- Per-user status: new/learned/weak
+- MCQ quiz with weighted selection
+- Corruption flagging to hide bad meanings for normal users
+- Admin filters: corrupt only, reported only
+- Report workflow from quiz (with suggested meaning)
+
+## Local Setup
+1) Install dependencies
+```
+npm install
+```
+
+2) Create Cloudflare resources (names referenced in `wrangler.jsonc`)
+```
+wrangler d1 create vocab-db
+wrangler r2 create vocab-subtitles
+wrangler queues create vocab-subtitles-queue
+```
+
+3) Update `wrangler.jsonc` with your D1 database_id.
+
+4) Apply local migrations + seed
+```
+npm run migrate:local
+```
+
+5) Start local worker-style dev
+```
+npm run dev:cf
+```
+
+For plain Next dev (no Cloudflare bindings), `npm run dev` works but the upload/queue features will not.
 
 ## Deployment
 ```
-npm run deploy   # build via OpenNext and push to Cloudflare
+npm run deploy
 ```
-Ensure your account has the same-named resources or adjust `wrangler.jsonc`.
 
-## Environment / secrets
-Google Cloud Translation API (v2 with API key):
-1) Create a Google Cloud project.
-2) Enable the **Cloud Translation API**.
-3) Create an **API key** (APIs & Services → Credentials → Create credentials → API key).
-4) Add secrets/vars for your worker:
-   - `GOOGLE_TRANSLATE_API_KEY` (the API key)
-   - Optional: `GOOGLE_TRANSLATE_PROJECT_ID` (kept for reference, not required for v2)
-   - Optional: `GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT` (estimated chars, default 10,000)
+## Environment Variables
+Set these as Cloudflare Worker secrets/vars:
 
-## Data flow
-1) Admin uploads subtitle → `/api/subtitles/upload`
-2) File stored in R2, job enqueued to `SUBTITLE_QUEUE`
-3) Worker `queue` handler calls `handleSubtitleQueue`:
-   - Fetch subtitle from R2
-   - Parse sentences/terms, store into D1 (`subtitle_files`, `vocab_terms`, `vocab_occurrences`)
-4) Meaning lookup (Bangla) is triggered manually from the admin subtitles page and caches in `translation_cache` + `vocabulary`.
-5) Learn pages read from D1 and render vocab per episode/content.
+Required
+- `GOOGLE_TRANSLATE_API_KEY`
 
-## Migrations
-- `migrations/0002_vocab_schema.sql` — authoritative schema aligned to the current code
-- `migrations/0003_seed.sql` — demo data for Friends/Office, plus sample vocab
-Run with: `npm run migrate:local` (uses `DB_NAME` env var, default `vocab-db`).
+Optional
+- `GOOGLE_TRANSLATE_PROJECT_ID` (kept for reference)
+- `GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT` (default 500,000)
+- `GOOGLE_TRANSLATE_DAILY_CHAR_LIMIT` (legacy fallback, optional)
 
-## Manual steps you still need
-- Create Cloudflare resources (D1/R2/Queue) and update `wrangler.jsonc` IDs.
-- Add secrets: `GOOGLE_TRANSLATE_PROJECT_ID`, `GOOGLE_TRANSLATE_API_KEY`.
-- If deploying, run `npm run deploy` after the above.
+## Database (D1)
+Key tables:
+- `subtitle_files` – uploaded subtitle metadata
+- `vocab_terms` – deduped terms
+- `vocab_occurrences` – per-episode occurrences, examples, overrides
+- `vocabulary` – canonical meaning by surface/pos
+- `translation_cache` – cached meaning per term+pos
+- `word_status` / `user_lemma_status` – per-user progress
+- `user_quiz_stats` – per-user quiz analytics
+- `vocab_reports` – user reports from quiz
 
-## Current limitations / next actions
-- Processing status page still uses static data; can be wired to `subtitle_files` and queue dead-letter info.
-- User auth/progress is not implemented; D1 tables exist for vocab, not per-user tracking yet.
-- No UI yet for marking “learned/weak”; buttons are present but not wired to persistence.
+### Migrations
+Run locally with:
+```
+npm run migrate:local
+```
 
-## Useful commands
+For production, run the specific migration file (example):
+```
+wrangler d1 execute vocab-db --remote --file migrations/0011_vocab_reports.sql
+```
+
+## Admin Actions
+- `/subtitles`: upload, delete packs, check/process meanings
+- `/usage`: monthly translation usage
+- Episode page (admin):
+  - Filters: corrupt only, reported only
+  - Edit words, apply suggestions, resolve, delete
+
+## Testing
+Run lightweight tests (utility correctness):
+```
+npm test
+```
+
+## Useful Commands
 - `npm run dev:cf` – dev with Cloudflare bindings
 - `npm run preview` – build + serve via OpenNext worker locally
-- `npm run deploy` – push to Cloudflare
+- `npm run deploy` – deploy to Cloudflare
 - `npm run migrate:local` – apply schema + seed to local D1
-- `npm run cf-typegen` – regenerate `cloudflare-env.d.ts`
+
+## Project Structure
+- `src/app/(admin)` – admin pages
+- `src/app/(learn)` – learner pages and quiz UI
+- `src/app/api` – API routes
+- `src/domain` – core processing/meaning logic
+- `src/lib` – shared helpers, D1 helpers, subtitle pipeline
+

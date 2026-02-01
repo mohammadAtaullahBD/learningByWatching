@@ -1,10 +1,8 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getSessionUser } from "@/lib/auth";
+import { isCorruptedMeaning, resolveQuestionCount } from "@/lib/vocab-utils";
 
 const DEFAULT_QUESTIONS = 8;
-
-const isCorruptedMeaning = (value: string | null, flag: number): boolean =>
-  flag === 1 || Boolean(value && value.includes("\uFFFD"));
 
 const shuffle = <T,>(items: T[]): T[] => {
   const copy = [...items];
@@ -78,7 +76,6 @@ export async function POST(request: Request): Promise<Response> {
   }
 
   const requested = Number(payload.count ?? DEFAULT_QUESTIONS);
-  const safeCount = Number.isFinite(requested) ? requested : DEFAULT_QUESTIONS;
 
   const { env } = await getCloudflareContext({ async: true });
   const db = (env as EnvWithDb).VOCAB_DB;
@@ -159,8 +156,11 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ questions: [], totalAvailable });
   }
 
-  const requestedCount =
-    safeCount <= 0 ? totalAvailable : Math.min(Math.max(1, safeCount), totalAvailable);
+  const requestedCount = resolveQuestionCount(
+    requested,
+    totalAvailable,
+    DEFAULT_QUESTIONS,
+  );
 
   const picked = weightedSample(
     candidates,

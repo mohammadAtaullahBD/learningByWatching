@@ -4,6 +4,7 @@ import {
 	saveVocabularyEntry,
 	setCachedTranslation,
 } from "./db";
+import { buildMonthKey } from "@/lib/vocab-utils";
 
 export type GoogleTranslateEnv = {
 	GOOGLE_TRANSLATE_PROJECT_ID?: string;
@@ -118,12 +119,6 @@ const fetchMeaningWithRetry = async (
 	return { meaning, isCorrupt: false };
 };
 
-const buildMonthKey = (value: Date): string => {
-	const year = value.getUTCFullYear();
-	const month = String(value.getUTCMonth() + 1).padStart(2, "0");
-	return `${year}-${month}`;
-};
-
 const getMonthlyUsage = async (
 	db: D1Database,
 	monthKey: string,
@@ -139,6 +134,7 @@ const getMonthlyUsage = async (
 		return monthRow.char_count;
 	}
 
+	// Backward-compat: previous versions stored daily keys like YYYY-MM-DD.
 	const likePattern = `${monthKey}-%`;
 	const sumRow = await db
 		.prepare(
@@ -175,7 +171,7 @@ const ensureWithinLimit = async (
 	charCount: number,
 	limit: number,
 ): Promise<void> => {
-	const monthKey = buildMonthKey(new Date());
+	const monthKey = buildMonthKey();
 	const used = await getMonthlyUsage(db, monthKey, provider);
 	if (used + charCount > limit) {
 		throw new Error("Monthly Google Translate limit reached.");

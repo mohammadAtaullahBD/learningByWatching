@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { getMeaningAndPersist, type GoogleTranslateEnv } from "@/domain/vocabulary/meaning";
 
 const DEFAULT_COST_PER_MILLION = 20;
+// Keep the admin action responsive; large packs are processed in batches.
 const MAX_PROCESS_PER_REQUEST = 120;
 const MAX_PROCESS_DURATION_MS = 15_000;
 

@@ -1,6 +1,7 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getSessionUser } from "@/lib/auth";
 import { getD1Database } from "@/lib/d1";
+import { buildMonthKey } from "@/lib/vocab-utils";
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
@@ -9,13 +10,6 @@ type UsageRow = {
   provider: string;
   char_count: number;
   month_key: string;
-};
-
-const buildMonthKey = (): string => {
-  const now = new Date();
-  const year = now.getUTCFullYear();
-  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  return `${year}-${month}`;
 };
 
 const getLimit = async (): Promise<number> => {

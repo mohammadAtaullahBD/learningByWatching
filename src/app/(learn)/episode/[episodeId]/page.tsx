@@ -1,4 +1,5 @@
 import { getD1Database } from "@/lib/d1";
+import { isCorruptedMeaning } from "@/lib/vocab-utils";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +13,6 @@ type VocabRow = {
   is_corrupt: number;
 };
 
-const isCorruptedMeaning = (value: string | null, flag: number): boolean =>
-  flag === 1 || Boolean(value && value.includes("\uFFFD"));
 
 async function fetchEpisodeVocab(episodeId: string): Promise<VocabRow[]> {
   const db = await getD1Database();
