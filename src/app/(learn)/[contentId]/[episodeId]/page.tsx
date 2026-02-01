@@ -1,4 +1,6 @@
 import AdminVocabEditor from "@/components/AdminVocabEditor";
+import ReportWordButton from "@/components/ReportWordButton";
+import SpeakButton from "@/components/SpeakButton";
 import VocabQuiz from "@/components/VocabQuiz";
 import VocabStatusBadge from "@/components/VocabStatusBadge";
 import { getD1Database } from "@/lib/d1";
@@ -385,22 +387,29 @@ export default async function EpisodeVocabPage({
                     key={`${entry.word}-${entry.part_of_speech ?? "unknown"}`}
                     className="border-b border-black/5 align-top"
                   >
-                    <td className="p-4">
-                      <div className="flex items-center gap-1">
-                        <span className="font-semibold">{entry.word}</span>
-                      </div>
-                      <div className="text-xs text-[color:var(--muted)]">
-                        lemma: {entry.lemma ?? "—"}
-                      </div>
-                    </td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-1">
+                      <span className="font-semibold">{entry.word}</span>
+                      <SpeakButton text={entry.word} />
+                    </div>
+                    <div className="text-xs text-[color:var(--muted)]">
+                      lemma: {entry.lemma ?? "—"}
+                    </div>
+                  </td>
                     <td className="p-4 text-[color:var(--muted)]">
                       {entry.part_of_speech ?? "—"}
                     </td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-1">
-                        <span>{entry.meaning ?? "—"}</span>
-                      </div>
-                    </td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-1">
+                      <span>{entry.meaning ?? "—"}</span>
+                      <ReportWordButton
+                        contentId={contentId}
+                        episodeId={episodeId}
+                        term={entry.word}
+                        meaning={entry.meaning}
+                      />
+                    </div>
+                  </td>
                     <td className="p-4 italic text-[color:var(--muted)]">
                       {entry.example ?? "—"}
                     </td>
