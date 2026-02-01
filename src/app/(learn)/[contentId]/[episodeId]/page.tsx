@@ -143,7 +143,7 @@ export default async function EpisodeVocabPage({
         return map;
       }
 
-      const merged = {
+      const merged: VocabRow = {
         ...existing,
         lemma: existing.lemma ?? entry.lemma,
         part_of_speech: existing.part_of_speech ?? entry.part_of_speech,
