@@ -55,6 +55,7 @@ type CandidateRow = {
   pos: string | null;
   meaning: string | null;
   is_corrupt: number;
+  film_count: number;
 };
 
 type StatRow = {
@@ -87,16 +88,23 @@ export async function POST(request: Request): Promise<Response> {
 
   const candidatesResult = await db
     .prepare(
-      `SELECT
+      `WITH film_counts AS (
+        SELECT content_id, term, COUNT(*) as film_count
+        FROM vocab_occurrences
+        GROUP BY content_id, term
+      )
+      SELECT
         o.term as word,
         COALESCE(MAX(o.lemma), v.lemma, o.term) as lemma,
         COALESCE(MAX(o.pos), v.pos) as pos,
         COALESCE(MAX(o.meaning_bn_override), v.meaning_bn) as meaning,
-        COALESCE(MAX(o.is_corrupt_override), v.is_corrupt, 0) as is_corrupt
+        COALESCE(MAX(o.is_corrupt_override), v.is_corrupt, 0) as is_corrupt,
+        COALESCE(MAX(fc.film_count), 0) as film_count
       FROM vocab_occurrences o
       LEFT JOIN vocabulary v ON v.surface_term = o.term
+      LEFT JOIN film_counts fc ON fc.content_id = o.content_id AND fc.term = o.term
       WHERE o.content_id = ?1 AND o.episode_id = ?2
-      GROUP BY o.term, v.lemma, v.pos, v.meaning_bn, v.is_corrupt
+      GROUP BY o.term, v.lemma, v.pos, v.meaning_bn, v.is_corrupt, fc.film_count
       ORDER BY o.term ASC`,
     )
     .bind(contentId, episodeId)
@@ -136,18 +144,16 @@ export async function POST(request: Request): Promise<Response> {
       const seenCount = statsMap.get(row.word) ?? 0;
       const isWeak = weakSet.has(row.word);
       const isLearned = learnedSet.has(lemma);
-      const base = 1 / (1 + seenCount);
-      const weakBoost = isWeak ? 3 : 1;
-      const learnedPenalty = isLearned ? 0.65 : 1;
-      const jitter = 0.9 + Math.random() * 0.2;
-      const weight = base * weakBoost * learnedPenalty * jitter;
+      const isNew = !isWeak && !isLearned;
 
       return {
         word: row.word,
         lemma,
         pos: row.pos,
         meaning: row.meaning?.trim() ?? "",
-        weight,
+        repeatCount: row.film_count ?? 0,
+        isWeak,
+        isNew,
       };
     });
 
@@ -162,11 +168,96 @@ export async function POST(request: Request): Promise<Response> {
     DEFAULT_QUESTIONS,
   );
 
-  const picked = weightedSample(
-    candidates,
-    candidates.map((item) => item.weight),
-    requestedCount,
-  );
+  const pickedSet = new Set<string>();
+  const picked: typeof candidates = [];
+  const weightFor = (count: number) => Math.max(1, count);
+
+  const pickFromPool = (pool: typeof candidates, count: number) => {
+    if (count <= 0) return 0;
+    const available = pool.filter((item) => !pickedSet.has(item.word));
+    if (available.length === 0) return count;
+    const items = weightedSample(
+      available,
+      available.map((item) => weightFor(item.repeatCount)),
+      Math.min(count, available.length),
+    );
+    for (const item of items) {
+      picked.push(item);
+      pickedSet.add(item.word);
+    }
+    return count - items.length;
+  };
+
+  const newPool = candidates.filter((item) => item.isNew);
+  const weakPool = candidates.filter((item) => item.isWeak);
+  const repeatPool = candidates;
+
+  const hasNew = newPool.length > 0;
+  const hasWeak = weakPool.length > 0;
+
+  let newPct = 0;
+  let weakPct = 0;
+  let repeatPct = 0;
+  let lowPct = 0;
+
+  if (hasNew) {
+    newPct = 0.95;
+    weakPct = 0.04;
+    repeatPct = 0.01;
+  } else if (hasWeak) {
+    weakPct = 0.8;
+    repeatPct = 0.2;
+  } else {
+    repeatPct = 0.85;
+    lowPct = 0.15;
+  }
+
+  let newTarget = Math.round(requestedCount * newPct);
+  let weakTarget = Math.round(requestedCount * weakPct);
+  let lowTarget = Math.round(requestedCount * lowPct);
+  let repeatTarget = requestedCount - newTarget - weakTarget - lowTarget;
+
+  let leftover = pickFromPool(newPool, newTarget);
+  weakTarget += leftover;
+  leftover = pickFromPool(weakPool, weakTarget);
+  repeatTarget += leftover;
+  const lowPoolCount = Math.max(1, Math.ceil(candidates.length * 0.2));
+  const lowPool = [...candidates]
+    .sort((a, b) => a.repeatCount - b.repeatCount)
+    .slice(0, lowPoolCount);
+  const weightForLow = (count: number) => 1 / (count + 1);
+  const pickFromLowPool = (pool: typeof candidates, count: number) => {
+    if (count <= 0) return 0;
+    const available = pool.filter((item) => !pickedSet.has(item.word));
+    if (available.length === 0) return count;
+    const items = weightedSample(
+      available,
+      available.map((item) => weightForLow(item.repeatCount)),
+      Math.min(count, available.length),
+    );
+    for (const item of items) {
+      picked.push(item);
+      pickedSet.add(item.word);
+    }
+    return count - items.length;
+  };
+
+  leftover = pickFromLowPool(lowPool, lowTarget);
+  repeatTarget += leftover;
+  leftover = pickFromPool(repeatPool, repeatTarget);
+
+  if (leftover > 0) {
+    const remaining = candidates.filter((item) => !pickedSet.has(item.word));
+    const fill = weightedSample(
+      remaining,
+      remaining.map((item) => weightFor(item.repeatCount)),
+      Math.min(leftover, remaining.length),
+    );
+    for (const item of fill) {
+      picked.push(item);
+      pickedSet.add(item.word);
+    }
+  }
 
   const meaningPool = Array.from(
     new Set(candidates.map((item) => item.meaning).filter((meaning) => Boolean(meaning))),

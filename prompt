@@ -18,6 +18,8 @@ MY PLAN (NEXT IMPLEMENTATIONS)
 3) Learning experience
    - Improve vocab list UX (sorting, filters by POS/status).
    - Add spaced repetition / review queue and progress charts.
+   - Show per-word repetition counts across the full film.
+   - Add sorting by repeat frequency (high→low / low→high).
 
 4) Reliability & ops
    - Add background job metrics and processing logs.
@@ -37,6 +39,8 @@ WHAT IS IMPLEMENTED (HISTORY OF IMPLEMENTATION)
    - /[contentId]/[episodeId]: shows vocab list with meanings + computed status badges.
    - /episode/[episodeId]: legacy episode vocab view.
    - Word rows show surface form + lemma.
+   - Word rows show repetition counts across the film.
+   - POS dropdown and repeat-frequency sorting are available.
    - Word list sorted by lemma.
    - Report flow is moved to quiz: users can report after answering with a suggested correction.
 

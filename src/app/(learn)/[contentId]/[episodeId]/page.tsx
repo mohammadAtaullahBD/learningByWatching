@@ -2,6 +2,7 @@ import AdminVocabEditor from "@/components/AdminVocabEditor";
 import ReportWordButton from "@/components/ReportWordButton";
 import SpeakButton from "@/components/SpeakButton";
 import PosFilterSelect from "@/components/PosFilterSelect";
+import RepeatSortSelect from "@/components/RepeatSortSelect";
 import VocabQuiz from "@/components/VocabQuiz";
 import VocabStatusBadge from "@/components/VocabStatusBadge";
 import { getD1Database } from "@/lib/d1";
@@ -24,6 +25,7 @@ type VocabRow = {
   is_corrupt: number;
   report_count: number | null;
   suggested_meaning: string | null;
+  film_count: number | null;
 };
 
 type QuizStatsRow = {
@@ -45,7 +47,12 @@ async function fetchVocab(
 
   const result = await db
     .prepare(
-      `SELECT
+      `WITH film_counts AS (
+        SELECT content_id, term, COUNT(*) as film_count
+        FROM vocab_occurrences
+        GROUP BY content_id, term
+      )
+      SELECT
         o.term as word,
         COALESCE(MAX(o.lemma), v.lemma) as lemma,
         COALESCE(MAX(o.pos), v.pos) as part_of_speech,
@@ -54,6 +61,7 @@ async function fetchVocab(
         MIN(o.sentence) as example,
         COALESCE(MAX(vr.report_count), 0) as report_count,
         MAX(vrl.suggested_meaning) as suggested_meaning,
+        COALESCE(MAX(fc.film_count), 0) as film_count,
         CASE
           WHEN MAX(CASE WHEN ws.status = 'weak' THEN 1 ELSE 0 END) = 1 THEN 'weak'
           WHEN MAX(CASE WHEN ls.status = 'learned' OR ws.status = 'learned' THEN 1 ELSE 0 END) = 1 THEN 'learned'
@@ -68,12 +76,13 @@ async function fetchVocab(
         GROUP BY content_id, episode_id, term
       ) vr ON vr.content_id = o.content_id AND vr.episode_id = o.episode_id AND vr.term = o.term
       LEFT JOIN vocab_reports vrl ON vrl.id = vr.latest_id
+      LEFT JOIN film_counts fc ON fc.content_id = o.content_id AND fc.term = o.term
       LEFT JOIN word_status ws
         ON ws.user_id = ? AND ws.content_id = o.content_id AND ws.episode_id = o.episode_id AND ws.term = o.term
       LEFT JOIN user_lemma_status ls
         ON ls.user_id = ? AND ls.lemma = COALESCE(o.lemma, v.lemma, o.term)
       WHERE o.content_id = ? AND o.episode_id = ?
-      GROUP BY o.term, v.meaning_bn, v.pos, v.lemma, v.is_corrupt, vr.report_count, vrl.suggested_meaning
+      GROUP BY o.term, v.meaning_bn, v.pos, v.lemma, v.is_corrupt, vr.report_count, vrl.suggested_meaning, fc.film_count
       ORDER BY COALESCE(MAX(o.lemma), v.lemma, o.term) ASC, o.term ASC`
     )
     .bind(userId, userId, contentId, episodeId)
@@ -116,6 +125,7 @@ export default async function EpisodeVocabPage({
     filter?: string | string[];
     status?: string | string[];
     pos?: string | string[];
+    repeat?: string | string[];
     page?: string | string[];
   }>;
 }) {
@@ -129,6 +139,7 @@ export default async function EpisodeVocabPage({
   const filter = getParam(query.filter);
   const statusParam = getParam(query.status);
   const posParam = getParam(query.pos);
+  const repeatParam = getParam(query.repeat);
   const pageParam = getParam(query.page);
   const filterCorrupt = filter === "corrupt";
   const filterReported = filter === "reported";
@@ -154,6 +165,7 @@ export default async function EpisodeVocabPage({
         example: existing.example ?? entry.example,
         report_count: Math.max(existing.report_count ?? 0, entry.report_count ?? 0),
         suggested_meaning: existing.suggested_meaning ?? entry.suggested_meaning,
+        film_count: Math.max(existing.film_count ?? 0, entry.film_count ?? 0),
         status:
           existing.status === "weak" || entry.status === "weak"
             ? "weak"
@@ -187,24 +199,38 @@ export default async function EpisodeVocabPage({
     ? (statusParam as VocabStatus)
     : "all";
   const posFilter = posParam ?? "all";
+  const repeatFilter = repeatParam && ["count_desc", "count_asc"].includes(repeatParam)
+    ? repeatParam
+    : "none";
   const filteredVocab = vocab.filter((entry) => {
     if (statusFilter !== "all" && entry.status !== statusFilter) return false;
     if (posFilter !== "all" && (entry.part_of_speech ?? "unknown") !== posFilter) return false;
     return true;
   });
+  const sortedVocab = [...filteredVocab];
+  if (repeatFilter !== "none") {
+    sortedVocab.sort((a, b) => {
+      const aCount = a.film_count ?? 0;
+      const bCount = b.film_count ?? 0;
+      if (repeatFilter === "count_desc") return bCount - aCount;
+      if (repeatFilter === "count_asc") return aCount - bCount;
+      return 0;
+    });
+  }
   const pageSize = 25;
-  const totalPages = Math.max(1, Math.ceil(filteredVocab.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(sortedVocab.length / pageSize));
   const currentPageRaw = Number(pageParam ?? "1");
   const currentPage = Number.isFinite(currentPageRaw)
     ? Math.min(Math.max(1, currentPageRaw), totalPages)
     : 1;
   const pageStart = (currentPage - 1) * pageSize;
-  const pageVocab = filteredVocab.slice(pageStart, pageStart + pageSize);
-  const buildHref = (updates: Partial<Record<"filter" | "status" | "pos" | "page", string | null>>) => {
+  const pageVocab = sortedVocab.slice(pageStart, pageStart + pageSize);
+  const buildHref = (updates: Partial<Record<"filter" | "status" | "pos" | "repeat" | "page", string | null>>) => {
     const next = {
       filter: filter ?? null,
       status: statusFilter === "all" ? null : statusFilter,
       pos: posFilter === "all" ? null : posFilter,
+      repeat: repeatFilter === "none" ? null : repeatFilter,
       page: currentPage > 1 ? String(currentPage) : null,
       ...updates,
     };
@@ -212,6 +238,7 @@ export default async function EpisodeVocabPage({
     if (next.filter) params.set("filter", next.filter);
     if (next.status) params.set("status", next.status);
     if (next.pos) params.set("pos", next.pos);
+    if (next.repeat) params.set("repeat", next.repeat);
     if (next.page && next.page !== "1") params.set("page", next.page);
     const queryString = params.toString();
     return queryString
@@ -225,6 +252,14 @@ export default async function EpisodeVocabPage({
     posOptions.map((pos) => [pos, buildHref({ pos, page: "1" })]),
   );
   const posAllHref = buildHref({ pos: null, page: "1" });
+  const repeatOptions = [
+    { value: "none", label: "Default order" },
+    { value: "count_desc", label: "Repeats: high → low" },
+    { value: "count_asc", label: "Repeats: low → high" },
+  ];
+  const repeatHrefMap = Object.fromEntries(
+    repeatOptions.map((option) => [option.value, buildHref({ repeat: option.value === "none" ? null : option.value, page: "1" })]),
+  );
   const pageSteps: Array<number | "gap"> = [];
   for (let i = 1; i <= totalPages; i += 1) {
     const isEdge = i === 1 || i === totalPages;
@@ -333,12 +368,17 @@ export default async function EpisodeVocabPage({
             </span>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2 border-b border-black/5 px-6 py-3 text-xs">
+        <div className="flex flex-wrap items-center gap-4 border-b border-black/5 px-6 py-3 text-xs">
           <PosFilterSelect
             value={posFilter}
             options={posOptions}
             hrefAll={posAllHref}
             hrefByPos={posHrefMap}
+          />
+          <RepeatSortSelect
+            value={repeatFilter}
+            options={repeatOptions}
+            hrefByValue={repeatHrefMap}
           />
         </div>
         {!user && (
@@ -381,6 +421,9 @@ export default async function EpisodeVocabPage({
                     </div>
                     <div className="text-xs text-[color:var(--muted)]">
                       lemma: {entry.lemma ?? "—"}
+                    </div>
+                    <div className="text-xs text-[color:var(--muted)]">
+                      repeats: {entry.film_count ?? 0}
                     </div>
                   </td>
                     <td className="p-4 text-[color:var(--muted)]">
