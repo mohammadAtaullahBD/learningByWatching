@@ -39,6 +39,14 @@ const splitSentences = (text: string): string[] => {
     .filter(Boolean);
 };
 
+export const extractSubtitleSentences = (rawText: string): string[] => {
+  // Keep only spoken lines; drop timestamps/metadata for better NLP accuracy.
+  const lines = rawText.split(/\r?\n/);
+  const cleanedLines = lines.filter((line) => !shouldIgnoreLine(line)).map(stripMarkup);
+  const combinedText = cleanedLines.join(" ").trim();
+  return splitSentences(combinedText);
+};
+
 const extractTerms = (sentence: string): string[] => {
   const matches = sentence.match(allowedWordPattern);
   if (!matches) return [];
@@ -48,10 +56,7 @@ const extractTerms = (sentence: string): string[] => {
 };
 
 export const parseSubtitleText = (rawText: string): ParsedSubtitleData => {
-  const lines = rawText.split(/\r?\n/);
-  const cleanedLines = lines.filter((line) => !shouldIgnoreLine(line)).map(stripMarkup);
-  const combinedText = cleanedLines.join(" ").trim();
-  const sentences = splitSentences(combinedText);
+  const sentences = extractSubtitleSentences(rawText);
 
   const termSet = new Set<string>();
   const occurrences: SubtitleOccurrence[] = [];

@@ -29,9 +29,6 @@ type Props = {
   disabled?: boolean;
 };
 
-const clampCount = (value: number, min: number, max: number) =>
-  Math.max(min, Math.min(max, value));
-
 export default function VocabQuiz({ contentId, episodeId, disabled = false }: Props) {
   const router = useRouter();
   const [questionCount, setQuestionCount] = useState(8);

@@ -1,34 +1,15 @@
 --------------------------------------------------
-PROJECT STATUS SUMMARY (2026-02-01)
+PROJECT STATUS SUMMARY (2026-02-02)
 --------------------------------------------------
 
 GOAL
 Build a Cloudflare-first Next.js app to learn vocabulary from film/series subtitles.
 Core flow: upload subtitle -> parse -> store vocab -> learn -> track progress.
 
-MY PLAN (NEXT IMPLEMENTATIONS)
-1) Quality controls
-   - Add a reprocess/retranslate tool per episode/pack to refresh meanings.
-   - Add better meaning QA (optional validation model or secondary source) and deeper admin review workflow.
-
-2) Admin tools
-   - Improve subtitle library: search, filters, pagination.
-   - Add bulk actions (delete pack, reprocess pack, export vocab).
-
-3) Learning experience
-   - Improve vocab list UX (sorting, filters by POS/status).
-   - Add spaced repetition / review queue and progress charts.
-   - Show per-word repetition counts across the full film.
-   - Add sorting by repeat frequency (high→low / low→high).
-
-4) Reliability & ops
-   - Add background job metrics and processing logs.
-   - Improve cache/usage monitoring for Google Translate.
-
-WHAT IS IMPLEMENTED (HISTORY OF IMPLEMENTATION)
+CURRENT FEATURES
 1) Upload + Processing
    - Admin uploads subtitles at /subtitles (R2 storage).
-   - Processing runs inline when queue is absent; queue handler supported when configured.
+   - Queue handler supported when configured.
    - Subtitle parsing extracts sentences and terms.
    - POS tagging + lemma extraction with wink-nlp (lazy-loaded).
    - Occurrences stored in D1 (vocab_occurrences + vocab_terms + subtitle_files).
@@ -36,9 +17,9 @@ WHAT IS IMPLEMENTED (HISTORY OF IMPLEMENTATION)
 2) Vocabulary + Learning Pages (D1-backed)
    - /dashboard: shows content + progress stats.
    - /film/[filmId]: shows episodes for a contentId from D1.
-   - /[contentId]/[episodeId]: shows vocab list with meanings + computed status badges.
+   - /[contentId]/[episodeId]: vocab list with meanings + computed status badges.
    - /episode/[episodeId]: legacy episode vocab view.
-   - Word rows show surface form + lemma.
+   - Word rows show surface form + lemma + POS.
    - Word rows show repetition counts across the film.
    - POS dropdown and repeat-frequency sorting are available.
    - Word list sorted by lemma.
@@ -53,7 +34,7 @@ WHAT IS IMPLEMENTED (HISTORY OF IMPLEMENTATION)
 4) Progress Tracking
    - word_status table: per-user weak status per word (set on wrong answers).
    - user_lemma_status table: learned status per lemma.
-   - Status is computed: weak > learned (lemma) > new.
+   - Status computed: weak > learned (lemma) > new.
    - Dashboard progress counts learned lemmas per user.
 
 5) Translation (Bangla meaning)
@@ -61,7 +42,7 @@ WHAT IS IMPLEMENTED (HISTORY OF IMPLEMENTATION)
    - Meanings cached in translation_cache + vocabulary.
    - Monthly usage tracking in D1 (translation_usage).
    - Limit controlled by GOOGLE_TRANSLATE_MONTHLY_CHAR_LIMIT (default 500,000).
-   - Meanings are generated on-demand via admin action (not during upload).
+   - Meanings generated on-demand via admin action (not during upload).
    - Admin stats show total terms, known/missing meanings, estimated chars and cost.
 
 6) Admin Tools
@@ -71,13 +52,39 @@ WHAT IS IMPLEMENTED (HISTORY OF IMPLEMENTATION)
    - Admin can mark word OK or delete word.
    - Admin can filter reported words and apply user suggestions.
    - /usage shows current month Google Translate usage + limit (UTC).
+   - /processing shows recent subtitle processing status.
 
-7) Data Model Extensions
-   - Store surface term + lemma per occurrence.
-   - Support meaning overrides per occurrence.
-   - Track corruption flags for vocab and overrides.
-   - Track quiz stats per user/episode/term.
-   - Track user reports + suggested corrections (vocab_reports).
+7) Quiz
+   - MCQ quiz with weighted selection.
+   - Correct answers set learned (lemma) status.
+   - Wrong answers set weak status per word.
+   - Users can report meanings after answering.
+
+8) UX
+   - Dark mode supported with user toggle + system preference.
+
+ACHIEVEMENTS
+- End-to-end subtitle pipeline with queue-ready processing.
+- Admin meaning workflow with caching and usage limits.
+- Per-user learning status and quiz analytics.
+- Live deployment on Cloudflare worker.
+
+PROJECT PLANS (NEXT IMPLEMENTATIONS)
+1) Quality controls
+   - Add reprocess/retranslate tool per episode/pack to refresh meanings.
+   - Add better meaning QA (optional validation model or secondary source).
+
+2) Admin tools
+   - Improve subtitle library: search, filters, pagination.
+   - Add bulk actions (delete pack, reprocess pack, export vocab).
+
+3) Learning experience
+   - Add spaced repetition / review queue and progress charts.
+   - Expand vocab list UX (better sorting and filters).
+
+4) Reliability & ops
+   - Add background job metrics and processing logs.
+   - Improve cache/usage monitoring for Google Translate.
 
 DEPLOYMENT & CONFIG
 - Build command for CI: npm run build
@@ -118,6 +125,5 @@ NOTES
 - Reported words are hidden from normal users; admins review via "Reported only" filter.
 - Quiz supports any question count; 0 means "use all available".
 - MCQ practice sets learned on correct answer and weak on wrong answer.
-- Dark mode supported with user toggle + system preference.
 
 --------------------------------------------------

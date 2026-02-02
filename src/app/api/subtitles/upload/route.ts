@@ -129,6 +129,7 @@ export async function POST(request: Request): Promise<Response> {
       const processingEnv = { ...(env as SubtitleEnv), VOCAB_DB };
       await processSubtitleText(job, await file.text(), processingEnv);
     } catch (error) {
+      console.error("Inline subtitle processing failed", error);
       return Response.json(
         { error: "Subtitle uploaded, but processing failed without a queue." },
         { status: 500 },

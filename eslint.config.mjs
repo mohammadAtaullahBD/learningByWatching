@@ -9,6 +9,16 @@ const compat = new FlatCompat({
 	baseDirectory: __dirname,
 });
 
-const eslintConfig = [...compat.extends("next/core-web-vitals", "next/typescript")];
+const eslintConfig = [
+	{
+		ignores: [
+			".open-next/**",
+			".next/**",
+			"node_modules/**",
+			"cloudflare-env.d.ts",
+		],
+	},
+	...compat.extends("next/core-web-vitals", "next/typescript"),
+];
 
 export default eslintConfig;

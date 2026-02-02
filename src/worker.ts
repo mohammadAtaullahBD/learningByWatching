@@ -1,11 +1,14 @@
-// @ts-ignore - OpenNext worker file is generated at build time.
-import openNextWorker, { BucketCachePurge, DOQueueHandler, DOShardedTagCache } from "../.open-next/worker.js";
+import openNextWorker, {
+  BucketCachePurge,
+  DOQueueHandler,
+  DOShardedTagCache,
+} from "../.open-next/worker.js";
 import { handleSubtitleQueue } from "./lib/subtitles/queue";
 import type { SubtitleUploadJob } from "./lib/subtitles/queue";
 
 export { BucketCachePurge, DOQueueHandler, DOShardedTagCache };
 
-export default {
+const worker = {
   fetch: openNextWorker.fetch,
   async queue(batch: MessageBatch, env: CloudflareEnv, ctx: ExecutionContext) {
     ctx.waitUntil(
@@ -19,3 +22,5 @@ export default {
     );
   },
 };
+
+export default worker;

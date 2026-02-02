@@ -58,11 +58,6 @@ type CandidateRow = {
   film_count: number;
 };
 
-type StatRow = {
-  term: string;
-  seen_count: number;
-};
-
 type EnvWithDb = CloudflareEnv & { VOCAB_DB?: D1Database };
 
 export async function POST(request: Request): Promise<Response> {
@@ -124,24 +119,13 @@ export async function POST(request: Request): Promise<Response> {
     .bind(user.username)
     .all<{ lemma: string }>();
 
-  const statRows = await db
-    .prepare(
-      "SELECT term, seen_count FROM user_quiz_stats WHERE user_id = ?1 AND content_id = ?2 AND episode_id = ?3",
-    )
-    .bind(user.username, contentId, episodeId)
-    .all<StatRow>();
-
   const weakSet = new Set(weakRows.results?.map((row) => row.term) ?? []);
   const learnedSet = new Set(learnedRows.results?.map((row) => row.lemma) ?? []);
-  const statsMap = new Map(
-    (statRows.results ?? []).map((row) => [row.term, row.seen_count]),
-  );
 
   const candidates = (candidatesResult.results ?? [])
     .filter((row) => row.meaning && !isCorruptedMeaning(row.meaning, row.is_corrupt))
     .map((row) => {
       const lemma = row.lemma ?? row.word;
-      const seenCount = statsMap.get(row.word) ?? 0;
       const isWeak = weakSet.has(row.word);
       const isLearned = learnedSet.has(lemma);
       const isNew = !isWeak && !isLearned;
@@ -197,24 +181,20 @@ export async function POST(request: Request): Promise<Response> {
 
   let newPct = 0;
   let weakPct = 0;
-  let repeatPct = 0;
   let lowPct = 0;
 
   if (hasNew) {
     newPct = 0.95;
     weakPct = 0.04;
-    repeatPct = 0.01;
   } else if (hasWeak) {
     weakPct = 0.8;
-    repeatPct = 0.2;
   } else {
-    repeatPct = 0.85;
     lowPct = 0.15;
   }
 
-  let newTarget = Math.round(requestedCount * newPct);
+  const newTarget = Math.round(requestedCount * newPct);
   let weakTarget = Math.round(requestedCount * weakPct);
-  let lowTarget = Math.round(requestedCount * lowPct);
+  const lowTarget = Math.round(requestedCount * lowPct);
   let repeatTarget = requestedCount - newTarget - weakTarget - lowTarget;
 
   let leftover = pickFromPool(newPool, newTarget);

@@ -1,5 +1,5 @@
 import type { GoogleTranslateEnv } from "@/domain/vocabulary/meaning";
-import { parseSubtitleText } from "./processing";
+import { extractSubtitleSentences } from "./processing";
 
 export type SubtitleUploadJob = {
   key: string;
@@ -116,10 +116,6 @@ const buildTokenData = async (sentences: string[]) => {
   const { analyzeSentence } = await import("@/domain/vocabulary/nlp");
   const occurrences: TokenOccurrence[] = [];
   const termSet = new Set<string>();
-  const vocabExamples = new Map<
-    string,
-    { surfaceTerm: string; lemma: string; pos: string; sentence: string }
-  >();
 
   for (let sentenceIndex = 0; sentenceIndex < sentences.length; sentenceIndex += 1) {
     const sentence = sentences[sentenceIndex];
@@ -136,15 +132,10 @@ const buildTokenData = async (sentences: string[]) => {
       const pos = token.pos ? token.pos.toLowerCase() : "unknown";
       termSet.add(surfaceTerm);
       occurrences.push({ term: surfaceTerm, lemma, pos, sentence, index: sentenceIndex });
-
-      const key = `${surfaceTerm}::${pos}`;
-      if (!vocabExamples.has(key)) {
-        vocabExamples.set(key, { surfaceTerm, lemma, pos, sentence });
-      }
     }
   }
 
-  return { occurrences, termSet, vocabExamples };
+  return { occurrences, termSet };
 };
 
 export const processSubtitleText = async (
@@ -153,13 +144,13 @@ export const processSubtitleText = async (
   env: ProcessingEnv,
 ): Promise<{ sentenceCount: number; termCount: number }> => {
   const { VOCAB_DB } = env;
-  const parsed = parseSubtitleText(text);
-  const { occurrences, termSet, vocabExamples } = await buildTokenData(parsed.sentences);
+  const sentences = extractSubtitleSentences(text);
+  const { occurrences, termSet } = await buildTokenData(sentences);
   const now = new Date().toISOString();
 
   const statements: D1PreparedStatement[] = [];
   statements.push(
-    insertSubtitleFile(VOCAB_DB, job, now, parsed.sentences.length, termSet.size),
+    insertSubtitleFile(VOCAB_DB, job, now, sentences.length, termSet.size),
   );
 
   for (const term of termSet) {
@@ -182,21 +173,23 @@ export const processSubtitleText = async (
   }
 
   if (statements.length > 0) {
-    for (let i = 0; i < statements.length; i += 100) {
-      await VOCAB_DB.batch(statements.slice(i, i + 100));
+    const BATCH_SIZE = 100;
+    // D1 batch has a hard limit; chunk to stay under the cap.
+    for (let i = 0; i < statements.length; i += BATCH_SIZE) {
+      await VOCAB_DB.batch(statements.slice(i, i + BATCH_SIZE));
     }
   }
 
   // Meanings are now generated on-demand via the admin action.
 
-  return { sentenceCount: parsed.sentences.length, termCount: termSet.size };
+  return { sentenceCount: sentences.length, termCount: termSet.size };
 };
 
 export const handleSubtitleQueue = async (
   batch: MessageBatch<SubtitleUploadJob>,
   env: SubtitleQueueEnv,
 ): Promise<void> => {
-  const { SUBTITLE_BUCKET, VOCAB_DB } = env;
+  const { SUBTITLE_BUCKET } = env;
 
   for (const message of batch.messages) {
     try {
@@ -212,6 +205,7 @@ export const handleSubtitleQueue = async (
       await processSubtitleText(job, text, env as ProcessingEnv);
       message.ack();
     } catch (error) {
+      console.error("Subtitle queue processing failed", error);
       message.retry();
     }
   }

@@ -163,6 +163,7 @@ export async function POST(request: Request): Promise<Response> {
 
       processedCount += 1;
     } catch (error) {
+      console.error("Meaning processing failed", error);
       // Skip failures but keep processing others.
       failedCount += 1;
     }

@@ -1,4 +1,4 @@
-declare module "../.open-next/worker.js" {
+declare module "*.open-next/worker.js" {
   const worker: {
     fetch: (
       request: Request,
