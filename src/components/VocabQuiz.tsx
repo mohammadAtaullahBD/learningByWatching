@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import SpeakButton from "@/components/SpeakButton";
 
 type Question = {
   id: string;
@@ -306,7 +307,10 @@ export default function VocabQuiz({ contentId, episodeId, disabled = false }: Pr
             <p className="text-xs uppercase tracking-[0.2em] text-[color:var(--muted)]">
               Choose the correct meaning
             </p>
-            <h3 className="mt-2 text-2xl font-semibold">{current.term}</h3>
+            <div className="mt-2 flex items-center gap-2">
+              <h3 className="text-2xl font-semibold">{current.term}</h3>
+              <SpeakButton text={current.term} />
+            </div>
             <p className="mt-1 text-xs text-[color:var(--muted)]">
               lemma: {current.lemma ?? "—"} · {current.pos ?? "—"}
             </p>
